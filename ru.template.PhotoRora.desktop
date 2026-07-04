@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=ru.template.PhotoRora
+Exec=/usr/bin/ru.template.PhotoRora
+Name=Template
+Name[ru]=Шаблон
+
+[X-Application]
+Permissions=Camera;UserDirs
+OrganizationName=ru.template
+ApplicationName=PhotoRora
+ExecDBus=/usr/bin/ru.template.PhotoRora
