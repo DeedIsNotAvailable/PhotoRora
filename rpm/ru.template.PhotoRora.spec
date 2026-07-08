@@ -1,5 +1,5 @@
 Name:       ru.template.PhotoRora
-Summary:    My Aurora OS Application
+Summary:    Photo editor with AI offline
 Version:    0.1
 Release:    1
 License:    BSD-3-Clause
@@ -13,7 +13,9 @@ BuildRequires:  pkgconfig(Qt5Qml)
 BuildRequires:  pkgconfig(Qt5Quick)
 
 %description
-Short description of my Aurora OS Application
+PhotoRora — offline photo editor with AI background removal and filters.
+
+%{?aurora_application_metadata}
 
 %prep
 %autosetup
@@ -24,6 +26,7 @@ Short description of my Aurora OS Application
 
 %install
 %make_install
+%{?aurora_application_install}
 
 %files
 %defattr(-,root,root,-)
@@ -32,3 +35,4 @@ Short description of my Aurora OS Application
 %{_datadir}/%{name}
 %{_datadir}/applications/%{name}.desktop
 %{_datadir}/icons/hicolor/*/apps/%{name}.png
+%{?aurora_application_files}

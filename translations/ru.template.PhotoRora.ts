@@ -42,9 +42,19 @@
 <context>
     <name>MainPage</name>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="10"/>
-        <source>Template</source>
-        <translation>Template</translation>
+        <location filename="../qml/pages/MainPage.qml" line="15"/>
+        <source>Импорт фото для ИИ</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="19"/>
+        <source>Выбрать фото из файлов</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="24"/>
+        <source>Выберите изображение</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 </TS>
