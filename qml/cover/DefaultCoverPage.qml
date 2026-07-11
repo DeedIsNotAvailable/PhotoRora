@@ -6,8 +6,8 @@ CoverBackground {
 
     CoverTemplate {
         objectName: "applicationCover"
-        primaryText: "App"
-        secondaryText: qsTr("Template")
+        primaryText: "PhotoRora"
+        secondaryText: qsTr("Работай с изображением!")
         icon {
             source: Qt.resolvedUrl("../icons/PhotoRora.svg")
             sourceSize { width: icon.width; height: icon.height }

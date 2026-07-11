@@ -2,8 +2,8 @@
 #define IMAGECONTROLLER_H
 
 #include <QObject>
-#include <QImage>   // Обязательно для QImage
-#include <QDebug>   // Обязательно для QDebug
+#include <QImage>
+#include <QDebug>
 #include <QString>
 
 class ImageController : public QObject
@@ -22,4 +22,4 @@ private:
     QImage m_currentImage;
 };
 
-#endif // IMAGECONTROLLER_H
+#endif
