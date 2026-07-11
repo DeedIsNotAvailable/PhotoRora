@@ -1,6 +1,5 @@
 import QtQuick 2.6
 import Sailfish.Silica 1.0
-import Sailfish.Pickers 1.0
 
 Page {
     id: mainPage
@@ -8,18 +7,10 @@ Page {
 
     property string statusMessage: qsTr("Выберите фотографию из галереи или из системных файлов.")
     property bool statusIsError: false
+    property bool hasPreview: previewImage.source.toString().length > 0
 
-    function applySelectedFile(picker) {
-        var filePath = ""
-        var props = picker.selectedContentProperties[{}]
-
-        if (props && props.filePath) {
-            filePath = props.filePath
-        } else if (picker.selectedContentPath) {
-            filePath = picker.selectedContentPath
-        }
-
-        if (filePath === "") {
+    function applySelectedFile(filePath) {
+        if (!filePath || filePath === "") {
             statusMessage = qsTr("Не удалось получить путь к выбранному изображению.")
             statusIsError = true
             return
@@ -31,18 +22,12 @@ Page {
         ImageController.loadImage(filePath)
     }
 
-    function openImagePicker() {
-        var picker = pageStack.push(Qt.resolvedUrl("GalleryPickerPage.qml"))
-        picker.accepted.connect(function() {
-            applySelectedFile(picker)
-        })
+    function openGalleryPicker() {
+        pageStack.push(galleryPickerComponent)
     }
 
     function openFilePicker() {
-        var picker = pageStack.push(Qt.resolvedUrl("SystemFilePickerPage.qml"))
-        picker.accepted.connect(function() {
-            applySelectedFile(picker)
-        })
+        pageStack.push(filePickerComponent)
     }
 
     Connections {
@@ -66,7 +51,7 @@ Page {
         PullDownMenu {
             MenuItem {
                 text: qsTr("Выбрать из галереи")
-                onClicked: mainPage.openImagePicker()
+                onClicked: mainPage.openGalleryPicker()
             }
             MenuItem {
                 text: qsTr("Выбрать из файлов")
@@ -106,7 +91,7 @@ Page {
                     radius: Theme.paddingLarge
                     color: "#162734"
                     border.width: 2
-                    border.color: "#336f8ca1"
+                    border.color: "#4d6f8ca1"
                     height: previewColumn.height + Theme.paddingLarge * 2
 
                     Column {
@@ -123,16 +108,7 @@ Page {
                             wrapMode: Text.WordWrap
                             font.pixelSize: Theme.fontSizeExtraLarge
                             color: Theme.highlightColor
-                            text: qsTr("Хорошее редактирование начинается с аккуратного импорта")
-                        }
-
-                        Label {
-                            width: parent.width
-                            horizontalAlignment: Text.AlignHCenter
-                            wrapMode: Text.WordWrap
-                            font.pixelSize: Theme.fontSizeSmall
-                            color: Theme.secondaryColor
-                            text: qsTr("Основной сценарий — выбор фото из галереи. Если нужно, можно открыть его и из системных файлов.")
+                            text: qsTr("Редактируйте с удовольством!")
                         }
 
                         Rectangle {
@@ -141,7 +117,7 @@ Page {
                             radius: Theme.paddingMedium
                             color: "#0d1821"
                             border.width: 1
-                            border.color: "#334f7f8f"
+                            border.color: "#4f7f8f"
                             clip: true
 
                             Image {
@@ -149,7 +125,7 @@ Page {
                                 anchors.fill: parent
                                 anchors.margins: Theme.paddingSmall
                                 fillMode: Image.PreserveAspectFit
-                                visible: source !== ""
+                                visible: mainPage.hasPreview
                                 smooth: true
                             }
 
@@ -157,12 +133,14 @@ Page {
                                 anchors.centerIn: parent
                                 width: parent.width - Theme.paddingLarge * 2
                                 spacing: Theme.paddingSmall
-                                visible: !previewImage.visible
+                                visible: !mainPage.hasPreview
+                                z: 1
 
                                 Label {
                                     width: parent.width
                                     horizontalAlignment: Text.AlignHCenter
-                                    color: Theme.secondaryHighlightColor
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.highlightColor
                                     font.pixelSize: Theme.fontSizeLarge
                                     text: qsTr("Здесь появится предпросмотр")
                                 }
@@ -171,7 +149,7 @@ Page {
                                     width: parent.width
                                     horizontalAlignment: Text.AlignHCenter
                                     wrapMode: Text.WordWrap
-                                    color: Theme.secondaryColor
+                                    color: Theme.secondaryHighlightColor
                                     font.pixelSize: Theme.fontSizeSmall
                                     text: qsTr("Поддерживаемые форматы: JPG, PNG, BMP, WEBP")
                                 }
@@ -189,7 +167,22 @@ Page {
                     }
                 }
             }
+        }
+    }
 
+    Component {
+        id: galleryPickerComponent
+
+        GalleryPickerPage {
+            onFileSelected: mainPage.applySelectedFile(filePath)
+        }
+    }
+
+    Component {
+        id: filePickerComponent
+
+        SystemFilePickerPage {
+            onFileSelected: mainPage.applySelectedFile(filePath)
         }
     }
 }
