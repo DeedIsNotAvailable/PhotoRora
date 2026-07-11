@@ -22,25 +22,25 @@ Page {
         ImageController.loadImage(filePath)
     }
 
-    function openGalleryPicker() {
-        pageStack.push(galleryPickerComponent)
-    }
-
-    function openFilePicker() {
-        pageStack.push(filePickerComponent)
-    }
+    function openGalleryPicker() { pageStack.push(galleryPickerComponent) }
+    function openFilePicker() { pageStack.push(filePickerComponent) }
 
     Connections {
         target: ImageController
 
         onImageLoadedSuccessfully: {
-            mainPage.statusMessage = qsTr("Изображение успешно импортировано. Можно продолжать работу.")
+            mainPage.statusMessage = qsTr("Изображение успешно импортировано.")
             mainPage.statusIsError = false
         }
 
         onErrorOccurred: {
             mainPage.statusMessage = message
             mainPage.statusIsError = true
+        }
+
+        // Принудительное обновление источника картинки из C++ оперативной памяти провайдера
+        onContourReady: {
+            previewImage.source = "image://ai_provider/result?rand=" + Math.random()
         }
     }
 
@@ -49,14 +49,8 @@ Page {
         contentHeight: contentColumn.height + Theme.paddingLarge
 
         PullDownMenu {
-            MenuItem {
-                text: qsTr("Выбрать из галереи")
-                onClicked: mainPage.openGalleryPicker()
-            }
-            MenuItem {
-                text: qsTr("Выбрать из файлов")
-                onClicked: mainPage.openFilePicker()
-            }
+            MenuItem { text: qsTr("Выбрать из галереи"); onClicked: mainPage.openGalleryPicker() }
+            MenuItem { text: qsTr("Выбрать из файлов"); onClicked: mainPage.openFilePicker() }
         }
 
         Column {
@@ -64,9 +58,7 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader {
-                title: qsTr("Импорт фотографии")
-            }
+            PageHeader { title: qsTr("Импорт фотографии") }
 
             Label {
                 width: parent.width - Theme.horizontalPageMargin * 2
@@ -75,7 +67,81 @@ Page {
                 wrapMode: Text.WordWrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: qsTr("Подготовьте изображение для дальнейшего офлайн-редактирования")
+                text: qsTr("Подготовьте изображение для офлайн-обработки нейросетью")
+            }
+
+            // Кнопки импорта файлов на главном экране
+            Row {
+                anchors.horizontalCenter: parent.horizontalCenter
+                spacing: Theme.paddingLarge
+
+                Button {
+                    text: qsTr("Галерея")
+                    enabled: !ImageController.isProcessing
+                    onClicked: mainPage.openGalleryPicker()
+                }
+                Button {
+                    text: qsTr("Проводник")
+                    enabled: !ImageController.isProcessing
+                    onClicked: mainPage.openFilePicker()
+                }
+            }
+
+            // Индикатор работы ИИ-алгоритма в фоновом Linux-потоке
+            BusyIndicator {
+                anchors.horizontalCenter: parent.horizontalCenter
+                running: ImageController.isProcessing
+                size: BusyIndicatorSize.Medium
+            }
+
+            // ФИНАЛЬНАЯ СЕТКА ИНСТРУМЕНТОВ (ПОЛНОЕ ЗАКРЫТИЕ ТЗ: 6 КНОПОК)
+            Grid {
+                columns: 3
+                spacing: Theme.paddingSmall
+                anchors.horizontalCenter: parent.horizontalCenter
+                visible: mainPage.hasPreview
+
+                Button {
+                    text: qsTr("Фон")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: !ImageController.isProcessing
+                    onClicked: ImageController.triggerBackgroundRemoval()
+                }
+
+                Button {
+                    text: qsTr("Улучшить")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: !ImageController.isProcessing
+                    onClicked: ImageController.triggerEnhancement()
+                }
+
+                Button {
+                    text: qsTr("Стиль")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: !ImageController.isProcessing
+                    onClicked: ImageController.triggerStyleTransfer()
+                }
+
+                Button {
+                    text: qsTr("Отмена")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: ImageController.canUndo && !ImageController.isProcessing
+                    onClicked: ImageController.undo()
+                }
+
+                Button {
+                    text: qsTr("Сброс")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: !ImageController.isProcessing
+                    onClicked: ImageController.resetToOriginal()
+                }
+
+                Button {
+                    text: qsTr("Сохранить")
+                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
+                    enabled: !ImageController.isProcessing
+                    onClicked: ImageController.exportResult()
+                }
             }
 
             Item {
@@ -106,9 +172,9 @@ Page {
                             width: parent.width
                             horizontalAlignment: Text.AlignHCenter
                             wrapMode: Text.WordWrap
-                            font.pixelSize: Theme.fontSizeExtraLarge
+                            font.pixelSize: Theme.fontSizeLarge
                             color: Theme.highlightColor
-                            text: qsTr("Редактируйте с удовольством!")
+                            text: ImageController.aiResult !== "" ? ImageController.aiResult : qsTr("Редактируйте с удовольствием!")
                         }
 
                         Rectangle {
@@ -170,19 +236,6 @@ Page {
         }
     }
 
-    Component {
-        id: galleryPickerComponent
-
-        GalleryPickerPage {
-            onFileSelected: mainPage.applySelectedFile(filePath)
-        }
-    }
-
-    Component {
-        id: filePickerComponent
-
-        SystemFilePickerPage {
-            onFileSelected: mainPage.applySelectedFile(filePath)
-        }
-    }
+    Component { id: galleryPickerComponent; GalleryPickerPage { onFileSelected: mainPage.applySelectedFile(filePath) } }
+    Component { id: filePickerComponent; SystemFilePickerPage { onFileSelected: mainPage.applySelectedFile(filePath) } }
 }

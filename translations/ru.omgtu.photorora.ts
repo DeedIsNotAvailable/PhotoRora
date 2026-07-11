@@ -57,47 +57,82 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="37"/>
-        <source>Изображение успешно импортировано. Можно продолжать работу.</source>
+        <location filename="../qml/pages/MainPage.qml" line="32"/>
+        <source>Изображение успешно импортировано.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="53"/>
+        <location filename="../qml/pages/MainPage.qml" line="70"/>
+        <source>Подготовьте изображение для офлайн-обработки нейросетью</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="79"/>
+        <source>Галерея</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="84"/>
+        <source>Проводник</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="126"/>
+        <source>Отмена</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="133"/>
+        <source>Сброс</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="140"/>
+        <source>Сохранить</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="177"/>
+        <source>Редактируйте с удовольствием!</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="52"/>
         <source>Выбрать из галереи</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="57"/>
+        <location filename="../qml/pages/MainPage.qml" line="53"/>
         <source>Выбрать из файлов</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="68"/>
+        <location filename="../qml/pages/MainPage.qml" line="61"/>
         <source>Импорт фотографии</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="78"/>
-        <source>Подготовьте изображение для дальнейшего офлайн-редактирования</source>
+        <location filename="../qml/pages/MainPage.qml" line="105"/>
+        <source>Фон</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="111"/>
-        <source>Хорошее редактирование начинается с аккуратного импорта</source>
+        <location filename="../qml/pages/MainPage.qml" line="112"/>
+        <source>Улучшить</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="120"/>
-        <source>Основной сценарий — выбор фото из галереи. Если нужно, можно открыть его и из системных файлов.</source>
+        <location filename="../qml/pages/MainPage.qml" line="119"/>
+        <source>Стиль</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="154"/>
+        <location filename="../qml/pages/MainPage.qml" line="211"/>
         <source>Здесь появится предпросмотр</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="163"/>
+        <location filename="../qml/pages/MainPage.qml" line="220"/>
         <source>Поддерживаемые форматы: JPG, PNG, BMP, WEBP</source>
         <translation type="unfinished"></translation>
     </message>
