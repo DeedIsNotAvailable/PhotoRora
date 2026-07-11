@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+X-Nemo-Application-Type=silica-qt5
+Icon=ru.omgtu.PhotoRora
+Exec=/usr/bin/ru.omgtu.PhotoRora
+Name=PhotoRora
+
+[X-Application]
+Permissions=Pictures
+OrganizationName=ru.omgtu
+ApplicationName=PhotoRora
