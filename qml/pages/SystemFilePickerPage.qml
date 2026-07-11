@@ -4,6 +4,6 @@ import Sailfish.Pickers 1.0
 
 FilePickerPage {
     id: pickerPage
-    title: qsTr("Choose a file")
+    title: qsTr("Выберите файл")
     nameFilters: [ "*.jpg", "*.jpeg", "*.png", "*.bmp", "*.webp" ]
 }

@@ -6,7 +6,7 @@ Page {
     id: mainPage
     allowedOrientations: Orientation.All
 
-    property string statusMessage: qsTr("Choose a photo from the gallery or from system files.")
+    property string statusMessage: qsTr("Выберите фотографию из галереи или из системных файлов.")
     property bool statusIsError: false
 
     function applySelectedFile(picker) {
@@ -20,13 +20,13 @@ Page {
         }
 
         if (filePath === "") {
-            statusMessage = qsTr("Could not get the path to the selected image.")
+            statusMessage = qsTr("Не удалось получить путь к выбранному изображению.")
             statusIsError = true
             return
         }
 
         previewImage.source = "file://" + filePath
-        statusMessage = qsTr("Photo selected. Importing into the application...")
+        statusMessage = qsTr("Фотография выбрана. Импортируем её в приложение...")
         statusIsError = false
         ImageController.loadImage(filePath)
     }
@@ -49,7 +49,7 @@ Page {
         target: ImageController
 
         onImageLoadedSuccessfully: {
-            mainPage.statusMessage = qsTr("Image imported successfully. You can continue working with it.")
+            mainPage.statusMessage = qsTr("Изображение успешно импортировано. Можно продолжать работу.")
             mainPage.statusIsError = false
         }
 
@@ -65,11 +65,11 @@ Page {
 
         PullDownMenu {
             MenuItem {
-                text: qsTr("Choose from gallery")
+                text: qsTr("Выбрать из галереи")
                 onClicked: mainPage.openImagePicker()
             }
             MenuItem {
-                text: qsTr("Choose from files")
+                text: qsTr("Выбрать из файлов")
                 onClicked: mainPage.openFilePicker()
             }
         }
@@ -80,7 +80,7 @@ Page {
             spacing: Theme.paddingLarge
 
             PageHeader {
-                title: qsTr("Photo import")
+                title: qsTr("Импорт фотографии")
             }
 
             Label {
@@ -90,7 +90,7 @@ Page {
                 wrapMode: Text.WordWrap
                 color: Theme.secondaryColor
                 font.pixelSize: Theme.fontSizeSmall
-                text: qsTr("Prepare an image for further offline editing")
+                text: qsTr("Подготовьте изображение для дальнейшего офлайн-редактирования")
             }
 
             Item {
@@ -123,7 +123,7 @@ Page {
                             wrapMode: Text.WordWrap
                             font.pixelSize: Theme.fontSizeExtraLarge
                             color: Theme.highlightColor
-                            text: qsTr("Your next edit starts with a clean import")
+                            text: qsTr("Хорошее редактирование начинается с аккуратного импорта")
                         }
 
                         Label {
@@ -132,7 +132,7 @@ Page {
                             wrapMode: Text.WordWrap
                             font.pixelSize: Theme.fontSizeSmall
                             color: Theme.secondaryColor
-                            text: qsTr("Open a photo from the gallery for the main scenario or use files as a fallback.")
+                            text: qsTr("Основной сценарий — выбор фото из галереи. Если нужно, можно открыть его и из системных файлов.")
                         }
 
                         Rectangle {
@@ -164,7 +164,7 @@ Page {
                                     horizontalAlignment: Text.AlignHCenter
                                     color: Theme.secondaryHighlightColor
                                     font.pixelSize: Theme.fontSizeLarge
-                                    text: qsTr("Preview will appear here")
+                                    text: qsTr("Здесь появится предпросмотр")
                                 }
 
                                 Label {
@@ -173,7 +173,7 @@ Page {
                                     wrapMode: Text.WordWrap
                                     color: Theme.secondaryColor
                                     font.pixelSize: Theme.fontSizeSmall
-                                    text: qsTr("Supported formats: JPG, PNG, BMP, WEBP")
+                                    text: qsTr("Поддерживаемые форматы: JPG, PNG, BMP, WEBP")
                                 }
                             }
                         }
@@ -190,17 +190,6 @@ Page {
                 }
             }
 
-            Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Choose from gallery")
-                onClicked: mainPage.openImagePicker()
-            }
-
-            Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                text: qsTr("Choose from files")
-                onClicked: mainPage.openFilePicker()
-            }
         }
     }
 }
