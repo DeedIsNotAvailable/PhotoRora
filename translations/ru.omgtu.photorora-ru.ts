@@ -35,25 +35,80 @@
     <name>DefaultCoverPage</name>
     <message>
         <location filename="../qml/cover/DefaultCoverPage.qml" line="10"/>
-        <source>Template</source>
-        <translation>Шаблон</translation>
+        <source>Ready for editing</source>
+        <translation type="unfinished"></translation>
     </message>
 </context>
 <context>
     <name>MainPage</name>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="15"/>
-        <source>Импорт фото для ИИ</source>
+        <location filename="../qml/pages/MainPage.qml" line="9"/>
+        <source>Choose a photo from the gallery or from system files.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="19"/>
-        <source>Выбрать фото из файлов</source>
+        <location filename="../qml/pages/MainPage.qml" line="23"/>
+        <source>Could not get the path to the selected image.</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="24"/>
-        <source>Выберите изображение</source>
+        <location filename="../qml/pages/MainPage.qml" line="29"/>
+        <source>Photo selected. Importing into the application...</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="52"/>
+        <source>Image imported successfully. You can continue working with it.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="68"/>
+        <location filename="../qml/pages/MainPage.qml" line="195"/>
+        <source>Choose from gallery</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="72"/>
+        <location filename="../qml/pages/MainPage.qml" line="201"/>
+        <source>Choose from files</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="83"/>
+        <source>Photo import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="93"/>
+        <source>Prepare an image for further offline editing</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="126"/>
+        <source>Your next edit starts with a clean import</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="135"/>
+        <source>Open a photo from the gallery for the main scenario or use files as a fallback.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="167"/>
+        <source>Preview will appear here</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="176"/>
+        <source>Supported formats: JPG, PNG, BMP, WEBP</source>
+        <translation type="unfinished"></translation>
+    </message>
+</context>
+<context>
+    <name>SystemFilePickerPage</name>
+    <message>
+        <location filename="../qml/pages/SystemFilePickerPage.qml" line="7"/>
+        <source>Choose a file</source>
         <translation type="unfinished"></translation>
     </message>
 </context>

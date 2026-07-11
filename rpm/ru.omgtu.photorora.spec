@@ -1,4 +1,4 @@
-Name:       ru.template.PhotoRora
+Name:       ru.omgtu.PhotoRora
 Summary:    Photo editor with AI offline
 Version:    0.1
 Release:    1
