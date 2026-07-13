@@ -49,8 +49,16 @@ Page {
         contentHeight: contentColumn.height + Theme.paddingLarge
 
         PullDownMenu {
-            MenuItem { text: qsTr("Выбрать из галереи"); onClicked: mainPage.openGalleryPicker() }
-            MenuItem { text: qsTr("Выбрать из файлов"); onClicked: mainPage.openFilePicker() }
+            MenuItem {
+                text: qsTr("Выбрать из галереи")
+                enabled: !ImageController.isProcessing && !ImageController.canUndo
+                onClicked: mainPage.openGalleryPicker()
+            }
+            MenuItem {
+                text: qsTr("Выбрать из файлов")
+                enabled: !ImageController.isProcessing && !ImageController.canUndo
+                onClicked: mainPage.openFilePicker()
+            }
         }
 
         Column {
@@ -70,23 +78,6 @@ Page {
                 text: qsTr("Подготовьте изображение для офлайн-обработки нейросетью")
             }
 
-            // Кнопки импорта файлов на главном экране
-            Row {
-                anchors.horizontalCenter: parent.horizontalCenter
-                spacing: Theme.paddingLarge
-
-                Button {
-                    text: qsTr("Галерея")
-                    enabled: !ImageController.isProcessing
-                    onClicked: mainPage.openGalleryPicker()
-                }
-                Button {
-                    text: qsTr("Проводник")
-                    enabled: !ImageController.isProcessing
-                    onClicked: mainPage.openFilePicker()
-                }
-            }
-
             // Индикатор работы ИИ-алгоритма в фоновом Linux-потоке
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
@@ -94,53 +85,81 @@ Page {
                 size: BusyIndicatorSize.Medium
             }
 
-            // ФИНАЛЬНАЯ СЕТКА ИНСТРУМЕНТОВ (ПОЛНОЕ ЗАКРЫТИЕ ТЗ: 6 КНОПОК)
-            Grid {
-                columns: 3
-                spacing: Theme.paddingSmall
+            Button {
                 anchors.horizontalCenter: parent.horizontalCenter
+                visible: ImageController.isProcessing
+                enabled: ImageController.isProcessing
+                text: qsTr("Отменить обработку")
+                onClicked: ImageController.cancelProcessing()
+            }
+
+            SectionHeader {
                 visible: mainPage.hasPreview
+                text: qsTr("Инструменты")
+            }
 
-                Button {
-                    text: qsTr("Фон")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: !ImageController.isProcessing
-                    onClicked: ImageController.triggerBackgroundRemoval()
-                }
+            Rectangle {
+                visible: mainPage.hasPreview
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                radius: Theme.paddingLarge
+                color: "#11202b"
+                border.width: 1
+                border.color: "#3f5f6f"
+                height: toolsGrid.height + Theme.paddingLarge * 2
 
-                Button {
-                    text: qsTr("Улучшить")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: !ImageController.isProcessing
-                    onClicked: ImageController.triggerEnhancement()
-                }
+                Grid {
+                    id: toolsGrid
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: Theme.paddingLarge
+                    columns: 2
+                    spacing: Theme.paddingMedium
 
-                Button {
-                    text: qsTr("Стиль")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: !ImageController.isProcessing
-                    onClicked: ImageController.triggerStyleTransfer()
-                }
+                    Button {
+                        text: qsTr("Фон")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.triggerBackgroundRemoval()
+                    }
 
-                Button {
-                    text: qsTr("Отмена")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: ImageController.canUndo && !ImageController.isProcessing
-                    onClicked: ImageController.undo()
-                }
+                    Button {
+                        text: qsTr("Улучшить")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.triggerEnhancement()
+                    }
 
-                Button {
-                    text: qsTr("Сброс")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: !ImageController.isProcessing
-                    onClicked: ImageController.resetToOriginal()
-                }
+                    Button {
+                        text: qsTr("Стиль")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.triggerStyleTransfer()
+                    }
 
-                Button {
-                    text: qsTr("Сохранить")
-                    preferredWidth: mainPage.width / 3 - Theme.paddingSmall * 2
-                    enabled: !ImageController.isProcessing
-                    onClicked: ImageController.exportResult()
+                    Button {
+                        text: qsTr("Отмена")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: ImageController.canUndo && !ImageController.isProcessing
+                        onClicked: ImageController.undo()
+                    }
+
+                    Button {
+                        text: qsTr("Сброс")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.resetToOriginal()
+                    }
+
+                    Button {
+                        text: qsTr("Сохранить")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.exportResult()
+                    }
                 }
             }
 

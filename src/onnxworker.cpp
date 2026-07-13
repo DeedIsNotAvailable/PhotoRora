@@ -8,8 +8,32 @@
 
 OnnxWorker::OnnxWorker(QObject *parent) : QObject(parent) {}
 
+void OnnxWorker::requestCancel()
+{
+    m_cancelRequested.store(true);
+}
+
+bool OnnxWorker::isCancellationRequested() const
+{
+    return m_cancelRequested.load();
+}
+
+bool OnnxWorker::sleepWithCancellationCheck(unsigned long ms)
+{
+    for (unsigned long elapsed = 0; elapsed < ms; elapsed += 20) {
+        if (isCancellationRequested()) {
+            return false;
+        }
+        QThread::msleep(20);
+    }
+
+    return !isCancellationRequested();
+}
+
 void OnnxWorker::runInference(const QImage &image, int mode)
 {
+    m_cancelRequested.store(false);
+
     if (image.isNull()) {
         emit errorOccurred(QStringLiteral("Пустая картинка для обработки"));
         return;
@@ -29,10 +53,17 @@ void OnnxWorker::runInference(const QImage &image, int mode)
         qint64 preprocessingTime = timer.elapsed();
 
         timer.restart();
-        QThread::msleep(200); // Симуляция инференса весов
+        if (!sleepWithCancellationCheck(200)) {
+            emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+            return;
+        }
 
         QImage maskSmall(modelWidth, modelHeight, QImage::Format_Grayscale8);
         for (int y = 0; y < modelHeight; ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+                return;
+            }
             for (int x = 0; x < modelWidth; ++x) {
                 if (qGray(resized.pixel(x, y)) > 190) maskSmall.setPixel(x, y, qRgb(0, 0, 0));
                 else maskSmall.setPixel(x, y, qRgb(255, 255, 255));
@@ -45,6 +76,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
 
         // ИСПРАВЛЕНО: замена (x, x) на правильные координаты сетки (x, y)
         for (int y = 0; y < image.height(); ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+                return;
+            }
             for (int x = 0; x < image.width(); ++x) {
                 if (qGray(finalMask.pixel(x, y)) > 127) {
                     resultImage.setPixel(x, y, image.pixel(x, y));
@@ -64,6 +99,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
 
         int minL = 255, maxL = 0;
         for (int y = 0; y < resultImage.height(); ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
+                return;
+            }
             for (int x = 0; x < resultImage.width(); ++x) {
                 int gray = qGray(resultImage.pixel(x, y));
                 if (gray < minL) minL = gray;
@@ -74,6 +113,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
         if (maxL == minL) maxL++;
 
         for (int y = 0; y < resultImage.height(); ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
+                return;
+            }
             for (int x = 0; x < resultImage.width(); ++x) {
                 QRgb p = resultImage.pixel(x, y);
                 int r = qBound(0, ((qRed(p) - minL) * 255) / (maxL - minL), 255);
@@ -83,7 +126,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
             }
         }
 
-        QThread::msleep(150);
+        if (!sleepWithCancellationCheck(150)) {
+            emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
+            return;
+        }
         qint64 inferenceTime = timer.elapsed();
         statusText = QString("Контраст и яркость автокорректированы за %1 мс").arg(preprocessingTime + inferenceTime);
 
@@ -95,6 +141,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
         resultImage = image.convertToFormat(QImage::Format_RGB888);
 
         for (int y = 1; y < resultImage.height() - 1; ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Стилизация изображения отменена"));
+                return;
+            }
             for (int x = 1; x < resultImage.width() - 1; ++x) {
                 int grayX = qGray(image.pixel(x+1, y)) - qGray(image.pixel(x-1, y));
                 int grayY = qGray(image.pixel(x, y+1)) - qGray(image.pixel(x, y-1));
@@ -105,7 +155,10 @@ void OnnxWorker::runInference(const QImage &image, int mode)
             }
         }
 
-        QThread::msleep(200);
+        if (!sleepWithCancellationCheck(200)) {
+            emit inferenceCanceled(QStringLiteral("Стилизация изображения отменена"));
+            return;
+        }
         qint64 inferenceTime = timer.elapsed();
         statusText = QString("Стилизация под графику выполнена за %1 мс").arg(preprocessingTime + inferenceTime);
     }

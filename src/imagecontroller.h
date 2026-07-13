@@ -19,12 +19,13 @@ class ImageController : public QObject
 
 public:
     explicit ImageController(QObject *parent = nullptr);
-    virtual ~ImageController() {}
+    virtual ~ImageController();
 
     Q_INVOKABLE void loadImage(const QString &filePath);
     Q_INVOKABLE void undo();
     Q_INVOKABLE void resetToOriginal();
     Q_INVOKABLE void exportResult();
+    Q_INVOKABLE void cancelProcessing();
     // Новые инструменты конвейера обработки для кнопок QML
     Q_INVOKABLE void triggerBackgroundRemoval();
     Q_INVOKABLE void triggerEnhancement();
@@ -50,6 +51,7 @@ signals:
 private slots:
     void onInferenceFinished(const QString &result);
     void onInferenceError(const QString &message);
+    void onInferenceCanceled(const QString &message);
     void onImageProcessed(const QImage &processedImage);
 
 private:

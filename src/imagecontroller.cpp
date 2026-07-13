@@ -13,10 +13,21 @@ ImageController::ImageController(QObject *parent) : QObject(parent)
     connect(this, &ImageController::startInference, m_worker, &OnnxWorker::runInference);
     connect(m_worker, &OnnxWorker::inferenceFinished, this, &ImageController::onInferenceFinished);
     connect(m_worker, &OnnxWorker::errorOccurred, this, &ImageController::onInferenceError);
+    connect(m_worker, &OnnxWorker::inferenceCanceled, this, &ImageController::onInferenceCanceled);
     connect(m_worker, &OnnxWorker::imageProcessed, this, &ImageController::onImageProcessed);
 
     connect(&m_workerThread, &QThread::finished, m_worker, &QObject::deleteLater);
     m_workerThread.start();
+}
+
+ImageController::~ImageController()
+{
+    if (m_worker) {
+        m_worker->requestCancel();
+    }
+
+    m_workerThread.quit();
+    m_workerThread.wait();
 }
 
 void ImageController::setProvider(AiImageProvider *provider)
@@ -113,10 +124,29 @@ void ImageController::resetToOriginal()
     updateUiWithCurrentImage();
 }
 
+void ImageController::cancelProcessing()
+{
+    if (!m_isProcessing || !m_worker) {
+        return;
+    }
+
+    m_worker->requestCancel();
+    m_aiResult = QStringLiteral("Запрошена отмена текущей обработки...");
+    emit aiResultChanged();
+}
+
 void ImageController::onInferenceFinished(const QString &result)
 {
     m_isProcessing = false;
     m_aiResult = result;
+    emit isProcessingChanged();
+    emit aiResultChanged();
+}
+
+void ImageController::onInferenceCanceled(const QString &message)
+{
+    m_isProcessing = false;
+    m_aiResult = message;
     emit isProcessingChanged();
     emit aiResultChanged();
 }
