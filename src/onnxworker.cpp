@@ -1,5 +1,9 @@
 #include "onnxworker.h"
+#include <onnxruntime_cxx_api.h>
+#include <QCoreApplication>
 #include <QDebug>
+#include <QDir>
+#include <QFileInfo>
 #include <QThread>
 #include <QElapsedTimer>
 #include <QtMath>
@@ -8,9 +12,115 @@
 
 OnnxWorker::OnnxWorker(QObject *parent) : QObject(parent) {}
 
+OnnxWorker::~OnnxWorker() = default;
+
+namespace {
+int effectiveDimension(qint64 value, int fallback)
+{
+    return value > 0 ? static_cast<int>(value) : fallback;
+}
+
+float toProbability(float value)
+{
+    if (value >= 0.0f && value <= 1.0f) {
+        return value;
+    }
+
+    return 1.0f / (1.0f + std::exp(-value));
+}
+}
+
 void OnnxWorker::requestCancel()
 {
     m_cancelRequested.store(true);
+}
+
+QString OnnxWorker::resolveModelPath() const
+{
+    const QStringList candidates = {
+        QStringLiteral("/usr/share/ru.omgtu.PhotoRora/lib/bgremoval.onnx"),
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ru.omgtu.PhotoRora/lib/bgremoval.onnx")),
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../share/ru.omgtu.PhotoRora/lib/bgremoval.onnx")),
+        QDir::cleanPath(QDir::currentPath() + QStringLiteral("/data/bgremoval.onnx"))
+    };
+
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return candidates.first();
+}
+
+bool OnnxWorker::ensureBackgroundSession(QString &errorMessage)
+{
+    if (m_backgroundSessionReady) {
+        return true;
+    }
+
+    const QString modelPath = resolveModelPath();
+    if (!QFileInfo::exists(modelPath)) {
+        errorMessage = QStringLiteral("Не найден файл модели: %1").arg(modelPath);
+        return false;
+    }
+
+    try {
+        m_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PhotoRora");
+        m_sessionOptions = std::make_unique<Ort::SessionOptions>();
+        m_sessionOptions->SetIntraOpNumThreads(1);
+        m_sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+
+        const std::string modelPathUtf8 = modelPath.toStdString();
+        m_backgroundSession = std::make_unique<Ort::Session>(*m_env, modelPathUtf8.c_str(), *m_sessionOptions);
+        m_runOptions = std::make_unique<Ort::RunOptions>();
+
+        Ort::AllocatorWithDefaultOptions allocator;
+
+        const size_t inputCount = m_backgroundSession->GetInputCount();
+        const size_t outputCount = m_backgroundSession->GetOutputCount();
+        if (inputCount == 0 || outputCount == 0) {
+            errorMessage = QStringLiteral("Модель не содержит входов или выходов");
+            return false;
+        }
+
+        m_inputNameStorage.clear();
+        m_outputNameStorage.clear();
+        m_inputNames.clear();
+        m_outputNames.clear();
+        m_inputNameStorage.reserve(inputCount);
+        m_outputNameStorage.reserve(outputCount);
+        m_inputNames.reserve(inputCount);
+        m_outputNames.reserve(outputCount);
+
+        for (size_t i = 0; i < inputCount; ++i) {
+            auto inputName = m_backgroundSession->GetInputNameAllocated(i, allocator);
+            m_inputNameStorage.emplace_back(inputName.get());
+        }
+
+        for (size_t i = 0; i < outputCount; ++i) {
+            auto outputName = m_backgroundSession->GetOutputNameAllocated(i, allocator);
+            m_outputNameStorage.emplace_back(outputName.get());
+        }
+
+        for (const std::string &inputName : m_inputNameStorage) {
+            m_inputNames.push_back(inputName.c_str());
+        }
+
+        for (const std::string &outputName : m_outputNameStorage) {
+            m_outputNames.push_back(outputName.c_str());
+        }
+
+        m_inputShape = m_backgroundSession->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+        m_backgroundSessionReady = true;
+        qDebug() << "[ONNX] Модель загружена:" << modelPath
+                 << "вход:" << QString::fromStdString(m_inputNameStorage.front())
+                 << "выход:" << QString::fromStdString(m_outputNameStorage.front());
+        return true;
+    } catch (const Ort::Exception &ex) {
+        errorMessage = QStringLiteral("Ошибка инициализации ONNX Runtime: %1").arg(QString::fromUtf8(ex.what()));
+        return false;
+    }
 }
 
 bool OnnxWorker::isCancellationRequested() const
@@ -46,49 +156,152 @@ void OnnxWorker::runInference(const QImage &image, int mode)
     QString statusText;
 
     if (mode == ModeBackgroundRemoval) {
-        // --- 1. ИНСТРУМЕНТ «ФОН»: СЕГМЕНТАЦИЯ ---
-        int modelWidth = 320;
-        int modelHeight = 320;
-        QImage resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio).convertToFormat(QImage::Format_RGB888);
-        qint64 preprocessingTime = timer.elapsed();
-
-        timer.restart();
-        if (!sleepWithCancellationCheck(200)) {
-            emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+        QString sessionError;
+        if (!ensureBackgroundSession(sessionError)) {
+            emit errorOccurred(sessionError);
             return;
         }
 
-        QImage maskSmall(modelWidth, modelHeight, QImage::Format_Grayscale8);
+        const int modelHeight = m_inputShape.size() >= 3 ? effectiveDimension(m_inputShape[m_inputShape.size() - 2], image.height()) : image.height();
+        const int modelWidth = m_inputShape.size() >= 4 ? effectiveDimension(m_inputShape[m_inputShape.size() - 1], image.width()) : image.width();
+        QImage resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB888);
+
+        std::vector<float> inputTensorData(static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) * 3u);
         for (int y = 0; y < modelHeight; ++y) {
             if (isCancellationRequested()) {
                 emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
                 return;
             }
+            const uchar *scanLine = resized.constScanLine(y);
             for (int x = 0; x < modelWidth; ++x) {
-                if (qGray(resized.pixel(x, y)) > 190) maskSmall.setPixel(x, y, qRgb(0, 0, 0));
-                else maskSmall.setPixel(x, y, qRgb(255, 255, 255));
+                const int pixelOffset = x * 3;
+                const size_t pixelIndex = static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x);
+                inputTensorData[pixelIndex] = static_cast<float>(scanLine[pixelOffset]) / 255.0f;
+                inputTensorData[static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                    static_cast<float>(scanLine[pixelOffset + 1]) / 255.0f;
+                inputTensorData[2u * static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                    static_cast<float>(scanLine[pixelOffset + 2]) / 255.0f;
             }
         }
-        qint64 inferenceTime = timer.elapsed();
+        qint64 preprocessingTime = timer.elapsed();
 
-        QImage finalMask = maskSmall.scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-        resultImage = QImage(image.size(), QImage::Format_ARGB32);
+        timer.restart();
+        try {
+            std::vector<int64_t> inputShape = m_inputShape;
+            if (inputShape.empty()) {
+                inputShape = {1, 3, modelHeight, modelWidth};
+            } else {
+                if (inputShape.size() >= 1 && inputShape[0] <= 0) inputShape[0] = 1;
+                if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = 3;
+                if (inputShape.size() >= 3 && inputShape[inputShape.size() - 2] <= 0) inputShape[inputShape.size() - 2] = modelHeight;
+                if (inputShape.size() >= 4 && inputShape[inputShape.size() - 1] <= 0) inputShape[inputShape.size() - 1] = modelWidth;
+            }
 
-        // ИСПРАВЛЕНО: замена (x, x) на правильные координаты сетки (x, y)
-        for (int y = 0; y < image.height(); ++y) {
+            Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
+                memoryInfo,
+                inputTensorData.data(),
+                inputTensorData.size(),
+                inputShape.data(),
+                inputShape.size()
+            );
+
+            auto outputs = m_backgroundSession->Run(
+                *m_runOptions,
+                m_inputNames.data(),
+                &inputTensor,
+                1,
+                m_outputNames.data(),
+                1
+            );
+
             if (isCancellationRequested()) {
                 emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
                 return;
             }
-            for (int x = 0; x < image.width(); ++x) {
-                if (qGray(finalMask.pixel(x, y)) > 127) {
-                    resultImage.setPixel(x, y, image.pixel(x, y));
-                } else {
-                    resultImage.setPixel(x, y, qRgba(0, 0, 0, 255));
+
+            qint64 inferenceTime = timer.elapsed();
+
+            timer.restart();
+            const auto outputShape = outputs.front().GetTensorTypeAndShapeInfo().GetShape();
+            const float *outputData = outputs.front().GetTensorData<float>();
+
+            int outputHeight = modelHeight;
+            int outputWidth = modelWidth;
+            int outputChannels = 1;
+
+            if (outputShape.size() >= 2) {
+                outputHeight = effectiveDimension(outputShape[outputShape.size() - 2], modelHeight);
+                outputWidth = effectiveDimension(outputShape[outputShape.size() - 1], modelWidth);
+            }
+            if (outputShape.size() >= 3) {
+                outputChannels = effectiveDimension(outputShape[outputShape.size() - 3], 1);
+            }
+
+            QImage maskSmall(outputWidth, outputHeight, QImage::Format_Grayscale8);
+            const size_t channelStride = static_cast<size_t>(outputWidth) * static_cast<size_t>(outputHeight);
+            for (int y = 0; y < outputHeight; ++y) {
+                if (isCancellationRequested()) {
+                    emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+                    return;
+                }
+                uchar *maskLine = maskSmall.scanLine(y);
+                for (int x = 0; x < outputWidth; ++x) {
+                    const size_t pixelIndex = static_cast<size_t>(y) * static_cast<size_t>(outputWidth) + static_cast<size_t>(x);
+                    float probability = 0.0f;
+
+                    if (outputChannels <= 1) {
+                        probability = toProbability(outputData[pixelIndex]);
+                    } else if (outputChannels == 2) {
+                        const float backgroundScore = outputData[pixelIndex];
+                        const float foregroundScore = outputData[channelStride + pixelIndex];
+                        probability = foregroundScore > backgroundScore ? 1.0f : 0.0f;
+                    } else {
+                        int bestChannel = 0;
+                        float bestScore = outputData[pixelIndex];
+                        for (int channel = 1; channel < outputChannels; ++channel) {
+                            const float score = outputData[static_cast<size_t>(channel) * channelStride + pixelIndex];
+                            if (score > bestScore) {
+                                bestScore = score;
+                                bestChannel = channel;
+                            }
+                        }
+                        probability = bestChannel == 0 ? 0.0f : 1.0f;
+                    }
+
+                    maskLine[x] = static_cast<uchar>(qBound(0, qRound(probability * 255.0f), 255));
                 }
             }
+
+            const QImage finalMask = maskSmall.scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            resultImage = QImage(image.size(), QImage::Format_ARGB32);
+            resultImage.fill(Qt::transparent);
+
+            for (int y = 0; y < image.height(); ++y) {
+                if (isCancellationRequested()) {
+                    emit inferenceCanceled(QStringLiteral("Удаление фона отменено"));
+                    return;
+                }
+
+                for (int x = 0; x < image.width(); ++x) {
+                    const int alpha = qGray(finalMask.pixel(x, y));
+                    if (alpha > 0) {
+                        const QRgb pixel = image.pixel(x, y);
+                        resultImage.setPixel(x, y, qRgba(qRed(pixel), qGreen(pixel), qBlue(pixel), alpha));
+                    }
+                }
+            }
+
+            const qint64 postprocessingTime = timer.elapsed();
+            statusText = QString("Фон удален за %1 мс (препроцессинг: %2 мс, инференс: %3 мс, постпроцессинг: %4 мс)")
+                             .arg(preprocessingTime + inferenceTime + postprocessingTime)
+                             .arg(preprocessingTime)
+                             .arg(inferenceTime)
+                             .arg(postprocessingTime);
+        } catch (const Ort::Exception &ex) {
+            emit errorOccurred(QStringLiteral("Ошибка инференса ONNX: %1").arg(QString::fromUtf8(ex.what())));
+            return;
         }
-        statusText = QString("Фон удален за %1 мс (ИИ: %2 мс)").arg(preprocessingTime + inferenceTime).arg(inferenceTime);
 
     } else if (mode == ModeEnhance) {
         // --- 2. ИНСТРУМЕНТ «УЛУЧШЕНИЕ»: АВТОКОРРЕКЦИЯ КАНАЛОВ ---
