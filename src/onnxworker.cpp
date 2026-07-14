@@ -151,7 +151,7 @@ bool OnnxWorker::sleepWithCancellationCheck(unsigned long ms)
     return !isCancellationRequested();
 }
 
-void OnnxWorker::runInference(const QImage &image, int mode)
+void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backgroundColor)
 {
     m_cancelRequested.store(false);
 
@@ -291,7 +291,7 @@ void OnnxWorker::runInference(const QImage &image, int mode)
             if (mode == ModeBackgroundRemoval) {
                 resultImage.fill(Qt::transparent);
             } else if (mode == ModeBackgroundColor) {
-                resultImage.fill(QColor(QStringLiteral("#e8eef5")).rgba());
+                resultImage.fill(backgroundColor.rgba());
             } else {
                 resultImage = makeBlurredBackdrop(sourceImage);
             }

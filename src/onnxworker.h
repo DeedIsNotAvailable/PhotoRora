@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QImage>
+#include <QColor>
 #include <QMetaType>
 #include <atomic>
 #include <memory>
@@ -35,7 +36,7 @@ public:
 
 public slots:
     // Теперь слот принимает картинку и режим фильтрации
-    void runInference(const QImage &image, int mode);
+    void runInference(const QImage &image, int mode, const QColor &backgroundColor);
 
 signals:
     void inferenceFinished(const QString &resultText);

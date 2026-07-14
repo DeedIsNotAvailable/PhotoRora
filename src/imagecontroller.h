@@ -3,6 +3,7 @@
 
 #include <QObject>
 #include <QImage>
+#include <QColor>
 #include <QString>
 #include <QThread>
 #include <QVector>
@@ -16,6 +17,7 @@ class ImageController : public QObject
     Q_PROPERTY(bool isProcessing READ isProcessing NOTIFY isProcessingChanged)
     Q_PROPERTY(QString aiResult READ aiResult NOTIFY aiResultChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
+    Q_PROPERTY(QString backgroundColorHex READ backgroundColorHex NOTIFY backgroundColorChanged)
 
 public:
     explicit ImageController(QObject *parent = nullptr);
@@ -32,12 +34,14 @@ public:
     Q_INVOKABLE void triggerBackgroundBlur();
     Q_INVOKABLE void triggerEnhancement();
     Q_INVOKABLE void triggerStyleTransfer();
+    Q_INVOKABLE void setBackgroundColor(const QString &colorValue);
 
     void setProvider(AiImageProvider *provider);
 
     bool isProcessing() const { return m_isProcessing; }
     QString aiResult() const { return m_aiResult; }
     bool canUndo() const { return m_history.size() > 1; }
+    QString backgroundColorHex() const { return m_backgroundColor.name(); }
 
 signals:
     void imageLoadedSuccessfully();
@@ -46,9 +50,10 @@ signals:
     void aiResultChanged();
     void contourReady();
     void historyChanged();
+    void backgroundColorChanged();
 
     // Сигнал отправляет в фоновый поток картинку и целочисленный ID операции
-    void startInference(const QImage &image, int mode);
+    void startInference(const QImage &image, int mode, const QColor &backgroundColor);
 
 private slots:
     void onInferenceFinished(const QString &result);
@@ -64,6 +69,7 @@ private:
 
     bool m_isProcessing = false;
     QString m_aiResult = "";
+    QColor m_backgroundColor = QColor(QStringLiteral("#e8eef5"));
 
     QThread m_workerThread;
     OnnxWorker *m_worker;

@@ -8,6 +8,7 @@ Page {
     property string statusMessage: qsTr("Выберите фотографию из галереи или из системных файлов.")
     property bool statusIsError: false
     property bool hasPreview: previewImage.source.toString().length > 0
+    property var backgroundPalette: ["#f4efe7", "#e8eef5", "#f1d7d7", "#2c3440", "#0f6d5b"]
 
     function applySelectedFile(filePath) {
         if (!filePath || filePath === "") {
@@ -38,7 +39,6 @@ Page {
             mainPage.statusIsError = true
         }
 
-        // Принудительное обновление источника картинки из C++ оперативной памяти провайдера
         onContourReady: {
             previewImage.source = "image://ai_provider/result?rand=" + Math.random()
         }
@@ -66,19 +66,8 @@ Page {
             width: parent.width
             spacing: Theme.paddingLarge
 
-            PageHeader { title: qsTr("Импорт фотографии") }
+            PageHeader { title: qsTr("Работа с изображениями") }
 
-            Label {
-                width: parent.width - Theme.horizontalPageMargin * 2
-                anchors.horizontalCenter: parent.horizontalCenter
-                horizontalAlignment: Text.AlignHCenter
-                wrapMode: Text.WordWrap
-                color: Theme.secondaryColor
-                font.pixelSize: Theme.fontSizeSmall
-                text: qsTr("Подготовьте изображение для офлайн-обработки нейросетью")
-            }
-
-            // Индикатор работы ИИ-алгоритма в фоновом Linux-потоке
             BusyIndicator {
                 anchors.horizontalCenter: parent.horizontalCenter
                 running: ImageController.isProcessing
@@ -91,90 +80,6 @@ Page {
                 enabled: ImageController.isProcessing
                 text: qsTr("Отменить обработку")
                 onClicked: ImageController.cancelProcessing()
-            }
-
-            SectionHeader {
-                visible: mainPage.hasPreview
-                text: qsTr("Инструменты")
-            }
-
-            Rectangle {
-                visible: mainPage.hasPreview
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.leftMargin: Theme.horizontalPageMargin
-                anchors.rightMargin: Theme.horizontalPageMargin
-                radius: Theme.paddingLarge
-                color: "#11202b"
-                border.width: 1
-                border.color: "#3f5f6f"
-                height: toolsGrid.height + Theme.paddingLarge * 2
-
-                Grid {
-                    id: toolsGrid
-                    anchors.left: parent.left
-                    anchors.right: parent.right
-                    anchors.top: parent.top
-                    anchors.margins: Theme.paddingLarge
-                    columns: 2
-                    spacing: Theme.paddingMedium
-
-                    Button {
-                        text: qsTr("Убрать фон")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.triggerBackgroundRemoval()
-                    }
-
-                    Button {
-                        text: qsTr("Фон + цвет")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.triggerBackgroundColor()
-                    }
-
-                    Button {
-                        text: qsTr("Фон + blur")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.triggerBackgroundBlur()
-                    }
-
-                    Button {
-                        text: qsTr("Улучшить")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.triggerEnhancement()
-                    }
-
-                    Button {
-                        text: qsTr("Стиль")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.triggerStyleTransfer()
-                    }
-
-                    Button {
-                        text: qsTr("Отмена")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: ImageController.canUndo && !ImageController.isProcessing
-                        onClicked: ImageController.undo()
-                    }
-
-                    Button {
-                        text: qsTr("Сброс")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.resetToOriginal()
-                    }
-
-                    Button {
-                        text: qsTr("Сохранить")
-                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
-                        enabled: !ImageController.isProcessing
-                        onClicked: ImageController.exportResult()
-                    }
-                }
             }
 
             Item {
@@ -255,6 +160,33 @@ Page {
                             }
                         }
 
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingMedium
+                            visible: mainPage.hasPreview
+
+                            Button {
+                                width: (parent.width - Theme.paddingMedium * 2) / 3
+                                text: qsTr("Отмена")
+                                enabled: ImageController.canUndo && !ImageController.isProcessing
+                                onClicked: ImageController.undo()
+                            }
+
+                            Button {
+                                width: (parent.width - Theme.paddingMedium * 2) / 3
+                                text: qsTr("Сброс")
+                                enabled: ImageController.canUndo && !ImageController.isProcessing
+                                onClicked: ImageController.resetToOriginal()
+                            }
+
+                            Button {
+                                width: (parent.width - Theme.paddingMedium * 2) / 3
+                                text: qsTr("Сохранить")
+                                enabled: ImageController.canUndo && !ImageController.isProcessing
+                                onClicked: ImageController.exportResult()
+                            }
+                        }
+
                         Label {
                             width: parent.width
                             wrapMode: Text.WordWrap
@@ -262,6 +194,154 @@ Page {
                             color: statusIsError ? Theme.errorColor : Theme.secondaryHighlightColor
                             font.pixelSize: Theme.fontSizeSmall
                             text: statusMessage
+                        }
+                    }
+                }
+            }
+
+            SectionHeader {
+                visible: mainPage.hasPreview
+                text: qsTr("Инструменты")
+            }
+
+            Rectangle {
+                visible: mainPage.hasPreview
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.leftMargin: Theme.horizontalPageMargin
+                anchors.rightMargin: Theme.horizontalPageMargin
+                radius: Theme.paddingLarge
+                color: "#11202b"
+                border.width: 1
+                border.color: "#3f5f6f"
+                height: toolsColumn.height + Theme.paddingLarge * 2
+
+                Column {
+                    id: toolsColumn
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.margins: Theme.paddingLarge
+                    spacing: Theme.paddingLarge
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.paddingSmall
+
+                        Label {
+                            width: parent.width
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeMedium
+                            text: qsTr("Фон")
+                        }
+
+                        Label {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: qsTr("Сегментация объекта и работа с задним планом")
+                        }
+
+                        Grid {
+                            id: backgroundToolsGrid
+                            width: parent.width
+                            columns: 2
+                            spacing: Theme.paddingMedium
+
+                            Button {
+                                width: (backgroundToolsGrid.width - backgroundToolsGrid.spacing) / 2
+                                text: qsTr("Убрать фон")
+                                enabled: !ImageController.isProcessing
+                                onClicked: ImageController.triggerBackgroundRemoval()
+                            }
+
+                            Button {
+                                width: (backgroundToolsGrid.width - backgroundToolsGrid.spacing) / 2
+                                text: qsTr("Фон + blur")
+                                enabled: !ImageController.isProcessing
+                                onClicked: ImageController.triggerBackgroundBlur()
+                            }
+
+                            Button {
+                                width: (backgroundToolsGrid.width - backgroundToolsGrid.spacing) / 2
+                                text: qsTr("Фон + цвет")
+                                enabled: !ImageController.isProcessing
+                                onClicked: ImageController.triggerBackgroundColor()
+                            }
+                        }
+
+                        Label {
+                            width: parent.width
+                            color: Theme.secondaryHighlightColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: qsTr("Цвет фона")
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingSmall
+
+                            Repeater {
+                                model: mainPage.backgroundPalette
+
+                                Rectangle {
+                                    width: Theme.itemSizeSmall
+                                    height: Theme.itemSizeSmall
+                                    radius: width / 2.5
+                                    color: modelData
+                                    border.width: ImageController.backgroundColorHex === modelData ? 4 : 2
+                                    border.color: ImageController.backgroundColorHex === modelData ? Theme.highlightColor : "#6f8796"
+                                    opacity: ImageController.isProcessing ? 0.5 : 1.0
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !ImageController.isProcessing
+                                        onClicked: ImageController.setBackgroundColor(modelData)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    Column {
+                        width: parent.width
+                        spacing: Theme.paddingSmall
+
+                        Label {
+                            width: parent.width
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeMedium
+                            text: qsTr("Коррекция и стиль")
+                        }
+
+                        Label {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: qsTr("Здесь останется место для нескольких стилей и их настроек")
+                        }
+
+                        Grid {
+                            id: styleToolsGrid
+                            width: parent.width
+                            columns: 2
+                            spacing: Theme.paddingMedium
+
+                            Button {
+                                width: (styleToolsGrid.width - styleToolsGrid.spacing) / 2
+                                text: qsTr("Улучшить")
+                                enabled: !ImageController.isProcessing
+                                onClicked: ImageController.triggerEnhancement()
+                            }
+
+                            Button {
+                                width: (styleToolsGrid.width - styleToolsGrid.spacing) / 2
+                                text: qsTr("Стиль")
+                                enabled: !ImageController.isProcessing
+                                onClicked: ImageController.triggerStyleTransfer()
+                            }
                         }
                     }
                 }

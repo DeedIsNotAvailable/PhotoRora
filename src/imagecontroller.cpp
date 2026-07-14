@@ -73,7 +73,7 @@ void ImageController::triggerBackgroundRemoval()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 0); // 0 -> ModeBackgroundRemoval
+    emit startInference(m_history.last(), 0, m_backgroundColor); // 0 -> ModeBackgroundRemoval
 }
 
 void ImageController::triggerBackgroundColor()
@@ -85,7 +85,7 @@ void ImageController::triggerBackgroundColor()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 1); // 1 -> ModeBackgroundColor
+    emit startInference(m_history.last(), 1, m_backgroundColor); // 1 -> ModeBackgroundColor
 }
 
 void ImageController::triggerBackgroundBlur()
@@ -97,7 +97,7 @@ void ImageController::triggerBackgroundBlur()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 2); // 2 -> ModeBackgroundBlur
+    emit startInference(m_history.last(), 2, m_backgroundColor); // 2 -> ModeBackgroundBlur
 }
 
 void ImageController::triggerEnhancement()
@@ -109,7 +109,7 @@ void ImageController::triggerEnhancement()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 3); // 3 -> ModeEnhance
+    emit startInference(m_history.last(), 3, m_backgroundColor); // 3 -> ModeEnhance
 }
 
 void ImageController::triggerStyleTransfer()
@@ -121,7 +121,18 @@ void ImageController::triggerStyleTransfer()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 4); // 4 -> ModeStyleTransfer
+    emit startInference(m_history.last(), 4, m_backgroundColor); // 4 -> ModeStyleTransfer
+}
+
+void ImageController::setBackgroundColor(const QString &colorValue)
+{
+    const QColor candidate(colorValue);
+    if (!candidate.isValid() || candidate == m_backgroundColor) {
+        return;
+    }
+
+    m_backgroundColor = candidate;
+    emit backgroundColorChanged();
 }
 
 void ImageController::undo()
