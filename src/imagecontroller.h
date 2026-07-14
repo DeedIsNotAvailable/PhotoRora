@@ -18,6 +18,7 @@ class ImageController : public QObject
     Q_PROPERTY(QString aiResult READ aiResult NOTIFY aiResultChanged)
     Q_PROPERTY(bool canUndo READ canUndo NOTIFY historyChanged)
     Q_PROPERTY(QString backgroundColorHex READ backgroundColorHex NOTIFY backgroundColorChanged)
+    Q_PROPERTY(QString selectedStyleId READ selectedStyleId NOTIFY selectedStyleChanged)
 
 public:
     explicit ImageController(QObject *parent = nullptr);
@@ -35,6 +36,7 @@ public:
     Q_INVOKABLE void triggerEnhancement();
     Q_INVOKABLE void triggerStyleTransfer();
     Q_INVOKABLE void setBackgroundColor(const QString &colorValue);
+    Q_INVOKABLE void setSelectedStyle(const QString &styleId);
 
     void setProvider(AiImageProvider *provider);
 
@@ -42,6 +44,7 @@ public:
     QString aiResult() const { return m_aiResult; }
     bool canUndo() const { return m_history.size() > 1; }
     QString backgroundColorHex() const { return m_backgroundColor.name(); }
+    QString selectedStyleId() const { return m_selectedStyleId; }
 
 signals:
     void imageLoadedSuccessfully();
@@ -51,9 +54,10 @@ signals:
     void contourReady();
     void historyChanged();
     void backgroundColorChanged();
+    void selectedStyleChanged();
 
     // Сигнал отправляет в фоновый поток картинку и целочисленный ID операции
-    void startInference(const QImage &image, int mode, const QColor &backgroundColor);
+    void startInference(const QImage &image, int mode, const QColor &backgroundColor, int styleVariant);
 
 private slots:
     void onInferenceFinished(const QString &result);
@@ -70,6 +74,7 @@ private:
     bool m_isProcessing = false;
     QString m_aiResult = "";
     QColor m_backgroundColor = QColor(QStringLiteral("#e8eef5"));
+    QString m_selectedStyleId = QStringLiteral("candy");
 
     QThread m_workerThread;
     OnnxWorker *m_worker;

@@ -39,6 +39,24 @@ QImage makeBlurredBackdrop(const QImage &source)
         .scaled(source.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
         .convertToFormat(QImage::Format_ARGB32);
 }
+
+QImage tensorToImage(const float *outputData, int width, int height)
+{
+    QImage image(width, height, QImage::Format_RGB888);
+    const size_t planeSize = static_cast<size_t>(width) * static_cast<size_t>(height);
+
+    for (int y = 0; y < height; ++y) {
+        uchar *scanLine = image.scanLine(y);
+        for (int x = 0; x < width; ++x) {
+            const size_t index = static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x);
+            scanLine[x * 3] = static_cast<uchar>(qBound(0, qRound(outputData[index]), 255));
+            scanLine[x * 3 + 1] = static_cast<uchar>(qBound(0, qRound(outputData[planeSize + index]), 255));
+            scanLine[x * 3 + 2] = static_cast<uchar>(qBound(0, qRound(outputData[2u * planeSize + index]), 255));
+        }
+    }
+
+    return image;
+}
 }
 
 void OnnxWorker::requestCancel()
@@ -64,6 +82,102 @@ QString OnnxWorker::resolveModelPath() const
     return candidates.first();
 }
 
+QString OnnxWorker::resolveStyleModelPath(int styleVariant) const
+{
+    const QString fileName = styleVariant == StyleMosaic ? QStringLiteral("mosaic-9.onnx") : QStringLiteral("candy-9.onnx");
+    const QStringList candidates = {
+        QStringLiteral("/usr/share/ru.omgtu.PhotoRora/lib/") + fileName,
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ru.omgtu.PhotoRora/lib/") + fileName),
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../share/ru.omgtu.PhotoRora/lib/") + fileName),
+        QDir::cleanPath(QDir::currentPath() + QStringLiteral("/data/") + fileName)
+    };
+
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return candidates.first();
+}
+
+bool OnnxWorker::ensureEnv()
+{
+    if (!m_env) {
+        m_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PhotoRora");
+    }
+
+    if (!m_sessionOptions) {
+        m_sessionOptions = std::make_unique<Ort::SessionOptions>();
+        m_sessionOptions->SetIntraOpNumThreads(1);
+        m_sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+    }
+
+    return true;
+}
+
+bool OnnxWorker::prepareSessionState(SessionState &state, const QString &modelPath, QString &errorMessage)
+{
+    if (state.ready) {
+        return true;
+    }
+
+    if (!QFileInfo::exists(modelPath)) {
+        errorMessage = QStringLiteral("Не найден файл модели: %1").arg(modelPath);
+        return false;
+    }
+
+    try {
+        ensureEnv();
+
+        const std::string modelPathUtf8 = modelPath.toStdString();
+        state.session = std::make_unique<Ort::Session>(*m_env, modelPathUtf8.c_str(), *m_sessionOptions);
+        state.runOptions = std::make_unique<Ort::RunOptions>();
+
+        Ort::AllocatorWithDefaultOptions allocator;
+        const size_t inputCount = state.session->GetInputCount();
+        const size_t outputCount = state.session->GetOutputCount();
+        if (inputCount == 0 || outputCount == 0) {
+            errorMessage = QStringLiteral("Модель не содержит входов или выходов");
+            return false;
+        }
+
+        state.inputNameStorage.clear();
+        state.outputNameStorage.clear();
+        state.inputNames.clear();
+        state.outputNames.clear();
+        state.inputNameStorage.reserve(inputCount);
+        state.outputNameStorage.reserve(outputCount);
+        state.inputNames.reserve(inputCount);
+        state.outputNames.reserve(outputCount);
+
+        for (size_t i = 0; i < inputCount; ++i) {
+            auto inputName = state.session->GetInputNameAllocated(i, allocator);
+            state.inputNameStorage.emplace_back(inputName.get());
+        }
+
+        for (size_t i = 0; i < outputCount; ++i) {
+            auto outputName = state.session->GetOutputNameAllocated(i, allocator);
+            state.outputNameStorage.emplace_back(outputName.get());
+        }
+
+        for (const std::string &inputName : state.inputNameStorage) {
+            state.inputNames.push_back(inputName.c_str());
+        }
+
+        for (const std::string &outputName : state.outputNameStorage) {
+            state.outputNames.push_back(outputName.c_str());
+        }
+
+        state.inputShape = state.session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+        state.ready = true;
+        return true;
+    } catch (const Ort::Exception &ex) {
+        errorMessage = QStringLiteral("Ошибка инициализации ONNX Runtime: %1").arg(QString::fromUtf8(ex.what()));
+        return false;
+    }
+}
+
 bool OnnxWorker::ensureBackgroundSession(QString &errorMessage)
 {
     if (m_backgroundSessionReady) {
@@ -77,17 +191,13 @@ bool OnnxWorker::ensureBackgroundSession(QString &errorMessage)
     }
 
     try {
-        m_env = std::make_unique<Ort::Env>(ORT_LOGGING_LEVEL_WARNING, "PhotoRora");
-        m_sessionOptions = std::make_unique<Ort::SessionOptions>();
-        m_sessionOptions->SetIntraOpNumThreads(1);
-        m_sessionOptions->SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_EXTENDED);
+        ensureEnv();
 
         const std::string modelPathUtf8 = modelPath.toStdString();
         m_backgroundSession = std::make_unique<Ort::Session>(*m_env, modelPathUtf8.c_str(), *m_sessionOptions);
         m_runOptions = std::make_unique<Ort::RunOptions>();
 
         Ort::AllocatorWithDefaultOptions allocator;
-
         const size_t inputCount = m_backgroundSession->GetInputCount();
         const size_t outputCount = m_backgroundSession->GetOutputCount();
         if (inputCount == 0 || outputCount == 0) {
@@ -134,6 +244,12 @@ bool OnnxWorker::ensureBackgroundSession(QString &errorMessage)
     }
 }
 
+bool OnnxWorker::ensureStyleSession(int styleVariant, QString &errorMessage)
+{
+    SessionState &state = styleVariant == StyleMosaic ? m_mosaicStyleSession : m_candyStyleSession;
+    return prepareSessionState(state, resolveStyleModelPath(styleVariant), errorMessage);
+}
+
 bool OnnxWorker::isCancellationRequested() const
 {
     return m_cancelRequested.load();
@@ -151,7 +267,7 @@ bool OnnxWorker::sleepWithCancellationCheck(unsigned long ms)
     return !isCancellationRequested();
 }
 
-void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backgroundColor)
+void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backgroundColor, int styleVariant)
 {
     m_cancelRequested.store(false);
 
@@ -340,7 +456,6 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
         }
 
     } else if (mode == ModeEnhance) {
-        // --- 2. ИНСТРУМЕНТ «УЛУЧШЕНИЕ»: АВТОКОРРЕКЦИЯ КАНАЛОВ ---
         qint64 preprocessingTime = timer.elapsed();
         timer.restart();
 
@@ -353,7 +468,7 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
                 return;
             }
             for (int x = 0; x < resultImage.width(); ++x) {
-                int gray = qGray(resultImage.pixel(x, y));
+                const int gray = qGray(resultImage.pixel(x, y));
                 if (gray < minL) minL = gray;
                 if (gray > maxL) maxL = gray;
             }
@@ -367,10 +482,10 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
                 return;
             }
             for (int x = 0; x < resultImage.width(); ++x) {
-                QRgb p = resultImage.pixel(x, y);
-                int r = qBound(0, ((qRed(p) - minL) * 255) / (maxL - minL), 255);
-                int g = qBound(0, ((qGreen(p) - minL) * 255) / (maxL - minL), 255);
-                int b = qBound(0, ((qBlue(p) - minL) * 255) / (maxL - minL), 255);
+                const QRgb pixel = resultImage.pixel(x, y);
+                const int r = qBound(0, ((qRed(pixel) - minL) * 255) / (maxL - minL), 255);
+                const int g = qBound(0, ((qGreen(pixel) - minL) * 255) / (maxL - minL), 255);
+                const int b = qBound(0, ((qBlue(pixel) - minL) * 255) / (maxL - minL), 255);
                 resultImage.setPixel(x, y, qRgb(r, g, b));
             }
         }
@@ -379,37 +494,98 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
             emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
             return;
         }
-        qint64 inferenceTime = timer.elapsed();
+        const qint64 inferenceTime = timer.elapsed();
         statusText = QString("Контраст и яркость автокорректированы за %1 мс").arg(preprocessingTime + inferenceTime);
 
     } else if (mode == ModeStyleTransfer) {
-        // --- 3. ИНСТРУМЕНТ «СТИЛЬ»: ХУДОЖЕСТВЕННАЯ СТИЛИЗАЦИЯ ---
-        qint64 preprocessingTime = timer.elapsed();
-        timer.restart();
+        QString sessionError;
+        if (!ensureStyleSession(styleVariant, sessionError)) {
+            emit errorOccurred(sessionError);
+            return;
+        }
 
-        resultImage = image.convertToFormat(QImage::Format_RGB888);
+        SessionState &styleSession = styleVariant == StyleMosaic ? m_mosaicStyleSession : m_candyStyleSession;
+        const int modelHeight = styleSession.inputShape.size() >= 3 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 2], image.height()) : image.height();
+        const int modelWidth = styleSession.inputShape.size() >= 4 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 1], image.width()) : image.width();
+        QImage resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB888);
 
-        for (int y = 1; y < resultImage.height() - 1; ++y) {
+        std::vector<float> inputTensorData(static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) * 3u);
+        for (int y = 0; y < modelHeight; ++y) {
             if (isCancellationRequested()) {
                 emit inferenceCanceled(QStringLiteral("Стилизация изображения отменена"));
                 return;
             }
-            for (int x = 1; x < resultImage.width() - 1; ++x) {
-                int grayX = qGray(image.pixel(x+1, y)) - qGray(image.pixel(x-1, y));
-                int grayY = qGray(image.pixel(x, y+1)) - qGray(image.pixel(x, y-1));
-                int edge = qBound(0, int(std::sqrt(grayX*grayX + grayY*grayY)), 255);
 
-                int inverted = 255 - edge;
-                resultImage.setPixel(x, y, qRgb(inverted, qMax(0, inverted - 20), qMax(0, inverted - 50)));
+            const uchar *scanLine = resized.constScanLine(y);
+            for (int x = 0; x < modelWidth; ++x) {
+                const int pixelOffset = x * 3;
+                const size_t pixelIndex = static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x);
+                inputTensorData[pixelIndex] = static_cast<float>(scanLine[pixelOffset]);
+                inputTensorData[static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                    static_cast<float>(scanLine[pixelOffset + 1]);
+                inputTensorData[2u * static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                    static_cast<float>(scanLine[pixelOffset + 2]);
             }
         }
+        const qint64 preprocessingTime = timer.elapsed();
+        timer.restart();
 
-        if (!sleepWithCancellationCheck(200)) {
-            emit inferenceCanceled(QStringLiteral("Стилизация изображения отменена"));
+        try {
+            std::vector<int64_t> inputShape = styleSession.inputShape;
+            if (inputShape.empty()) {
+                inputShape = {1, 3, modelHeight, modelWidth};
+            } else {
+                if (inputShape.size() >= 1 && inputShape[0] <= 0) inputShape[0] = 1;
+                if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = 3;
+                if (inputShape.size() >= 3 && inputShape[inputShape.size() - 2] <= 0) inputShape[inputShape.size() - 2] = modelHeight;
+                if (inputShape.size() >= 4 && inputShape[inputShape.size() - 1] <= 0) inputShape[inputShape.size() - 1] = modelWidth;
+            }
+
+            Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
+                memoryInfo,
+                inputTensorData.data(),
+                inputTensorData.size(),
+                inputShape.data(),
+                inputShape.size()
+            );
+
+            auto outputs = styleSession.session->Run(
+                *styleSession.runOptions,
+                styleSession.inputNames.data(),
+                &inputTensor,
+                1,
+                styleSession.outputNames.data(),
+                1
+            );
+
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QStringLiteral("Стилизация изображения отменена"));
+                return;
+            }
+
+            const qint64 inferenceTime = timer.elapsed();
+            timer.restart();
+
+            const auto outputShape = outputs.front().GetTensorTypeAndShapeInfo().GetShape();
+            const float *outputData = outputs.front().GetTensorData<float>();
+            const int outputHeight = outputShape.size() >= 3 ? effectiveDimension(outputShape[outputShape.size() - 2], modelHeight) : modelHeight;
+            const int outputWidth = outputShape.size() >= 4 ? effectiveDimension(outputShape[outputShape.size() - 1], modelWidth) : modelWidth;
+
+            resultImage = tensorToImage(outputData, outputWidth, outputHeight).scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+            const qint64 postprocessingTime = timer.elapsed();
+            const QString styleName = styleVariant == StyleMosaic ? QStringLiteral("Mosaic") : QStringLiteral("Candy");
+            statusText = QString("Стилизация %1 выполнена за %2 мс (препроцессинг: %3 мс, инференс: %4 мс, постпроцессинг: %5 мс)")
+                             .arg(styleName)
+                             .arg(preprocessingTime + inferenceTime + postprocessingTime)
+                             .arg(preprocessingTime)
+                             .arg(inferenceTime)
+                             .arg(postprocessingTime);
+        } catch (const Ort::Exception &ex) {
+            emit errorOccurred(QStringLiteral("Ошибка инференса ONNX: %1").arg(QString::fromUtf8(ex.what())));
             return;
         }
-        qint64 inferenceTime = timer.elapsed();
-        statusText = QString("Стилизация под графику выполнена за %1 мс").arg(preprocessingTime + inferenceTime);
     }
 
     emit inferenceFinished(statusText);

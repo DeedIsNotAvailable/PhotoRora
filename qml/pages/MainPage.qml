@@ -9,6 +9,10 @@ Page {
     property bool statusIsError: false
     property bool hasPreview: previewImage.source.toString().length > 0
     property var backgroundPalette: ["#f4efe7", "#e8eef5", "#f1d7d7", "#2c3440", "#0f6d5b"]
+    property var stylePalette: [
+        { id: "candy", title: qsTr("Candy") },
+        { id: "mosaic", title: qsTr("Mosaic") }
+    ]
 
     function applySelectedFile(filePath) {
         if (!filePath || filePath === "") {
@@ -312,7 +316,7 @@ Page {
                             width: parent.width
                             color: Theme.highlightColor
                             font.pixelSize: Theme.fontSizeMedium
-                            text: qsTr("Коррекция и стиль")
+                            text: qsTr("Улучшение")
                         }
 
                         Label {
@@ -320,28 +324,72 @@ Page {
                             wrapMode: Text.WordWrap
                             color: Theme.secondaryColor
                             font.pixelSize: Theme.fontSizeExtraSmall
-                            text: qsTr("Здесь останется место для нескольких стилей и их настроек")
+                            text: qsTr("Быстрая автокоррекция контраста и яркости")
                         }
 
-                        Grid {
-                            id: styleToolsGrid
+                        Button {
                             width: parent.width
-                            columns: 2
-                            spacing: Theme.paddingMedium
+                            text: qsTr("Улучшить")
+                            enabled: !ImageController.isProcessing
+                            onClicked: ImageController.triggerEnhancement()
+                        }
+                    }
 
-                            Button {
-                                width: (styleToolsGrid.width - styleToolsGrid.spacing) / 2
-                                text: qsTr("Улучшить")
-                                enabled: !ImageController.isProcessing
-                                onClicked: ImageController.triggerEnhancement()
-                            }
+                    Column {
+                        width: parent.width
+                        spacing: Theme.paddingSmall
 
-                            Button {
-                                width: (styleToolsGrid.width - styleToolsGrid.spacing) / 2
-                                text: qsTr("Стиль")
-                                enabled: !ImageController.isProcessing
-                                onClicked: ImageController.triggerStyleTransfer()
+                        Label {
+                            width: parent.width
+                            color: Theme.highlightColor
+                            font.pixelSize: Theme.fontSizeMedium
+                            text: qsTr("Стиль")
+                        }
+
+                        Label {
+                            width: parent.width
+                            wrapMode: Text.WordWrap
+                            color: Theme.secondaryColor
+                            font.pixelSize: Theme.fontSizeExtraSmall
+                            text: qsTr("Выберите художественный пресет и примените нейросетевую стилизацию")
+                        }
+
+                        Row {
+                            width: parent.width
+                            spacing: Theme.paddingSmall
+
+                            Repeater {
+                                model: mainPage.stylePalette
+
+                                Rectangle {
+                                    width: (parent.width - Theme.paddingSmall) / 2
+                                    height: Theme.itemSizeMedium
+                                    radius: Theme.paddingMedium
+                                    color: ImageController.selectedStyleId === modelData.id ? "#2f4f61" : "#1a2f3c"
+                                    border.width: 1
+                                    border.color: ImageController.selectedStyleId === modelData.id ? Theme.highlightColor : "#577487"
+                                    opacity: ImageController.isProcessing ? 0.5 : 1.0
+
+                                    Label {
+                                        anchors.centerIn: parent
+                                        text: modelData.title
+                                        color: Theme.primaryColor
+                                    }
+
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        enabled: !ImageController.isProcessing
+                                        onClicked: ImageController.setSelectedStyle(modelData.id)
+                                    }
+                                }
                             }
+                        }
+
+                        Button {
+                            width: parent.width
+                            text: qsTr("Стиль")
+                            enabled: !ImageController.isProcessing
+                            onClicked: ImageController.triggerStyleTransfer()
                         }
                     }
                 }

@@ -56,6 +56,8 @@ install(DIRECTORY qml
     DESTINATION share/${PROJECT_NAME}
 )
 install(FILES data/bgremoval.onnx
+              data/candy-9.onnx
+              data/mosaic-9.onnx
     DESTINATION share/${PROJECT_NAME}/lib
 )
 
@@ -85,6 +87,8 @@ add_custom_target(distfiles
         ${TS_FILES}
         ${ICON_FILES}
         data/bgremoval.onnx
+        data/candy-9.onnx
+        data/mosaic-9.onnx
         ${HEADERS}
 )
 

@@ -30,13 +30,19 @@ public:
     };
     Q_ENUM(FilterMode)
 
+    enum StyleVariant {
+        StyleCandy,
+        StyleMosaic
+    };
+    Q_ENUM(StyleVariant)
+
     explicit OnnxWorker(QObject *parent = nullptr);
     ~OnnxWorker();
     void requestCancel();
 
 public slots:
     // Теперь слот принимает картинку и режим фильтрации
-    void runInference(const QImage &image, int mode, const QColor &backgroundColor);
+    void runInference(const QImage &image, int mode, const QColor &backgroundColor, int styleVariant);
 
 signals:
     void inferenceFinished(const QString &resultText);
@@ -45,10 +51,25 @@ signals:
     void imageProcessed(const QImage &processedImage);
 
 private:
+    struct SessionState {
+        std::unique_ptr<Ort::Session> session;
+        std::unique_ptr<Ort::RunOptions> runOptions;
+        std::vector<std::string> inputNameStorage;
+        std::vector<std::string> outputNameStorage;
+        std::vector<const char *> inputNames;
+        std::vector<const char *> outputNames;
+        std::vector<int64_t> inputShape;
+        bool ready = false;
+    };
+
+    bool ensureEnv();
     bool ensureBackgroundSession(QString &errorMessage);
+    bool ensureStyleSession(int styleVariant, QString &errorMessage);
     QString resolveModelPath() const;
+    QString resolveStyleModelPath(int styleVariant) const;
     bool isCancellationRequested() const;
     bool sleepWithCancellationCheck(unsigned long ms);
+    bool prepareSessionState(SessionState &state, const QString &modelPath, QString &errorMessage);
 
     std::atomic_bool m_cancelRequested{false};
     std::unique_ptr<Ort::Env> m_env;
@@ -61,6 +82,8 @@ private:
     std::vector<const char *> m_outputNames;
     std::vector<int64_t> m_inputShape;
     bool m_backgroundSessionReady = false;
+    SessionState m_candyStyleSession;
+    SessionState m_mosaicStyleSession;
 };
 
 Q_DECLARE_METATYPE(QImage)
