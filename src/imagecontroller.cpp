@@ -76,6 +76,30 @@ void ImageController::triggerBackgroundRemoval()
     emit startInference(m_history.last(), 0); // 0 -> ModeBackgroundRemoval
 }
 
+void ImageController::triggerBackgroundColor()
+{
+    if (m_history.isEmpty() || m_isProcessing) return;
+
+    m_isProcessing = true;
+    m_aiResult = QStringLiteral("Нейросеть заменяет фон на цвет...");
+    emit isProcessingChanged();
+    emit aiResultChanged();
+
+    emit startInference(m_history.last(), 1); // 1 -> ModeBackgroundColor
+}
+
+void ImageController::triggerBackgroundBlur()
+{
+    if (m_history.isEmpty() || m_isProcessing) return;
+
+    m_isProcessing = true;
+    m_aiResult = QStringLiteral("Нейросеть размывает фон...");
+    emit isProcessingChanged();
+    emit aiResultChanged();
+
+    emit startInference(m_history.last(), 2); // 2 -> ModeBackgroundBlur
+}
+
 void ImageController::triggerEnhancement()
 {
     if (m_history.isEmpty() || m_isProcessing) return;
@@ -85,7 +109,7 @@ void ImageController::triggerEnhancement()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 1); // 1 -> ModeEnhance
+    emit startInference(m_history.last(), 3); // 3 -> ModeEnhance
 }
 
 void ImageController::triggerStyleTransfer()
@@ -97,7 +121,7 @@ void ImageController::triggerStyleTransfer()
     emit isProcessingChanged();
     emit aiResultChanged();
 
-    emit startInference(m_history.last(), 2); // 2 -> ModeStyleTransfer
+    emit startInference(m_history.last(), 4); // 4 -> ModeStyleTransfer
 }
 
 void ImageController::undo()

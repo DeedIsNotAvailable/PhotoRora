@@ -120,10 +120,24 @@ Page {
                     spacing: Theme.paddingMedium
 
                     Button {
-                        text: qsTr("Фон")
+                        text: qsTr("Убрать фон")
                         preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
                         enabled: !ImageController.isProcessing
                         onClicked: ImageController.triggerBackgroundRemoval()
+                    }
+
+                    Button {
+                        text: qsTr("Фон + цвет")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.triggerBackgroundColor()
+                    }
+
+                    Button {
+                        text: qsTr("Фон + blur")
+                        preferredWidth: (toolsGrid.width - toolsGrid.spacing) / 2
+                        enabled: !ImageController.isProcessing
+                        onClicked: ImageController.triggerBackgroundBlur()
                     }
 
                     Button {

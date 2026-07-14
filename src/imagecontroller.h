@@ -28,6 +28,8 @@ public:
     Q_INVOKABLE void cancelProcessing();
     // Новые инструменты конвейера обработки для кнопок QML
     Q_INVOKABLE void triggerBackgroundRemoval();
+    Q_INVOKABLE void triggerBackgroundColor();
+    Q_INVOKABLE void triggerBackgroundBlur();
     Q_INVOKABLE void triggerEnhancement();
     Q_INVOKABLE void triggerStyleTransfer();
 

@@ -4,6 +4,7 @@
 #include <QDebug>
 #include <QDir>
 #include <QFileInfo>
+#include <QColor>
 #include <QThread>
 #include <QElapsedTimer>
 #include <QtMath>
@@ -27,6 +28,16 @@ float toProbability(float value)
     }
 
     return 1.0f / (1.0f + std::exp(-value));
+}
+
+QImage makeBlurredBackdrop(const QImage &source)
+{
+    const QImage rgbSource = source.convertToFormat(QImage::Format_RGB32);
+    const int blurWidth = qMax(1, source.width() / 18);
+    const int blurHeight = qMax(1, source.height() / 18);
+    return rgbSource.scaled(blurWidth, blurHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+        .scaled(source.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+        .convertToFormat(QImage::Format_ARGB32);
 }
 }
 
@@ -155,7 +166,7 @@ void OnnxWorker::runInference(const QImage &image, int mode)
     QImage resultImage;
     QString statusText;
 
-    if (mode == ModeBackgroundRemoval) {
+    if (mode == ModeBackgroundRemoval || mode == ModeBackgroundColor || mode == ModeBackgroundBlur) {
         QString sessionError;
         if (!ensureBackgroundSession(sessionError)) {
             emit errorOccurred(sessionError);
@@ -273,9 +284,17 @@ void OnnxWorker::runInference(const QImage &image, int mode)
                 }
             }
 
-            const QImage finalMask = maskSmall.scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            const QImage finalMask = maskSmall.scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                .convertToFormat(QImage::Format_Grayscale8);
+            const QImage sourceImage = image.convertToFormat(QImage::Format_ARGB32);
             resultImage = QImage(image.size(), QImage::Format_ARGB32);
-            resultImage.fill(Qt::transparent);
+            if (mode == ModeBackgroundRemoval) {
+                resultImage.fill(Qt::transparent);
+            } else if (mode == ModeBackgroundColor) {
+                resultImage.fill(QColor(QStringLiteral("#e8eef5")).rgba());
+            } else {
+                resultImage = makeBlurredBackdrop(sourceImage);
+            }
 
             for (int y = 0; y < image.height(); ++y) {
                 if (isCancellationRequested()) {
@@ -283,17 +302,34 @@ void OnnxWorker::runInference(const QImage &image, int mode)
                     return;
                 }
 
+                const uchar *maskLine = finalMask.constScanLine(y);
                 for (int x = 0; x < image.width(); ++x) {
-                    const int alpha = qGray(finalMask.pixel(x, y));
-                    if (alpha > 0) {
-                        const QRgb pixel = image.pixel(x, y);
-                        resultImage.setPixel(x, y, qRgba(qRed(pixel), qGreen(pixel), qBlue(pixel), alpha));
+                    const int alpha = maskLine[x];
+                    if (alpha <= 0) {
+                        continue;
+                    }
+
+                    const QRgb foregroundPixel = sourceImage.pixel(x, y);
+                    if (mode == ModeBackgroundRemoval) {
+                        resultImage.setPixel(x, y, qRgba(qRed(foregroundPixel), qGreen(foregroundPixel), qBlue(foregroundPixel), alpha));
+                    } else {
+                        const QRgb backgroundPixel = resultImage.pixel(x, y);
+                        const int invAlpha = 255 - alpha;
+                        const int mixedRed = (qRed(foregroundPixel) * alpha + qRed(backgroundPixel) * invAlpha) / 255;
+                        const int mixedGreen = (qGreen(foregroundPixel) * alpha + qGreen(backgroundPixel) * invAlpha) / 255;
+                        const int mixedBlue = (qBlue(foregroundPixel) * alpha + qBlue(backgroundPixel) * invAlpha) / 255;
+                        resultImage.setPixel(x, y, qRgba(mixedRed, mixedGreen, mixedBlue, 255));
                     }
                 }
             }
 
             const qint64 postprocessingTime = timer.elapsed();
-            statusText = QString("Фон удален за %1 мс (препроцессинг: %2 мс, инференс: %3 мс, постпроцессинг: %4 мс)")
+            const QString actionText =
+                mode == ModeBackgroundRemoval ? QStringLiteral("Фон удален") :
+                mode == ModeBackgroundColor ? QStringLiteral("Фон заменен на цвет") :
+                QStringLiteral("Фон размыт");
+            statusText = QString("%1 за %2 мс (препроцессинг: %3 мс, инференс: %4 мс, постпроцессинг: %5 мс)")
+                             .arg(actionText)
                              .arg(preprocessingTime + inferenceTime + postprocessingTime)
                              .arg(preprocessingTime)
                              .arg(inferenceTime)

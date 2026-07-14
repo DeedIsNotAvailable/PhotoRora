@@ -22,6 +22,8 @@ class OnnxWorker : public QObject
 public:
     enum FilterMode {
         ModeBackgroundRemoval,
+        ModeBackgroundColor,
+        ModeBackgroundBlur,
         ModeEnhance,
         ModeStyleTransfer
     };
