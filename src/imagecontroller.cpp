@@ -115,7 +115,7 @@ void ImageController::triggerEnhancement()
     if (m_history.isEmpty() || m_isProcessing) return;
 
     m_isProcessing = true;
-    m_aiResult = QStringLiteral("Автокоррекция контраста и яркости...");
+    m_aiResult = QString::fromUtf8("Нейросеть улучшает детализацию...");
     emit isProcessingChanged();
     emit aiResultChanged();
 

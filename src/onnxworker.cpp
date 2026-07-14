@@ -87,6 +87,28 @@ QImage tensorToAnimeGanImage(const float *outputData, int width, int height)
 
     return image;
 }
+
+QColor rgbToYcbcr(const QColor &color)
+{
+    const double r = color.redF();
+    const double g = color.greenF();
+    const double b = color.blueF();
+
+    const double y = 0.299 * r + 0.587 * g + 0.114 * b;
+    const double cb = 0.5 + (-0.168736 * r - 0.331264 * g + 0.5 * b);
+    const double cr = 0.5 + (0.5 * r - 0.418688 * g - 0.081312 * b);
+    return QColor::fromRgbF(qBound(0.0, y, 1.0), qBound(0.0, cb, 1.0), qBound(0.0, cr, 1.0));
+}
+
+QRgb ycbcrToRgb(double y, double cb, double cr)
+{
+    const double centeredCb = cb - 0.5;
+    const double centeredCr = cr - 0.5;
+    const int r = qBound(0, qRound((y + 1.402 * centeredCr) * 255.0), 255);
+    const int g = qBound(0, qRound((y - 0.344136 * centeredCb - 0.714136 * centeredCr) * 255.0), 255);
+    const int b = qBound(0, qRound((y + 1.772 * centeredCb) * 255.0), 255);
+    return qRgb(r, g, b);
+}
 }
 
 void OnnxWorker::requestCancel()
@@ -122,6 +144,25 @@ QString OnnxWorker::resolveStyleModelPath(int styleVariant) const
     } else if (styleVariant == StyleShinkai) {
         fileName = QStringLiteral("AnimeGANv2_Shinkai.onnx");
     }
+    const QStringList candidates = {
+        QStringLiteral("/usr/share/ru.omgtu.PhotoRora/lib/") + fileName,
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ru.omgtu.PhotoRora/lib/") + fileName),
+        QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../../share/ru.omgtu.PhotoRora/lib/") + fileName),
+        QDir::cleanPath(QDir::currentPath() + QStringLiteral("/data/") + fileName)
+    };
+
+    for (const QString &candidate : candidates) {
+        if (QFileInfo::exists(candidate)) {
+            return candidate;
+        }
+    }
+
+    return candidates.first();
+}
+
+QString OnnxWorker::resolveEnhancementModelPath() const
+{
+    const QString fileName = QStringLiteral("super-resolution-10.onnx");
     const QStringList candidates = {
         QStringLiteral("/usr/share/ru.omgtu.PhotoRora/lib/") + fileName,
         QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ru.omgtu.PhotoRora/lib/") + fileName),
@@ -292,6 +333,11 @@ bool OnnxWorker::ensureStyleSession(int styleVariant, QString &errorMessage)
         state = &m_shinkaiStyleSession;
     }
     return prepareSessionState(*state, resolveStyleModelPath(styleVariant), errorMessage);
+}
+
+bool OnnxWorker::ensureEnhancementSession(QString &errorMessage)
+{
+    return prepareSessionState(m_enhancementSession, resolveEnhancementModelPath(), errorMessage);
 }
 
 bool OnnxWorker::isCancellationRequested() const
@@ -500,46 +546,122 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
         }
 
     } else if (mode == ModeEnhance) {
-        qint64 preprocessingTime = timer.elapsed();
-        timer.restart();
-
-        resultImage = image.convertToFormat(QImage::Format_RGB888);
-
-        int minL = 255, maxL = 0;
-        for (int y = 0; y < resultImage.height(); ++y) {
-            if (isCancellationRequested()) {
-                emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
-                return;
-            }
-            for (int x = 0; x < resultImage.width(); ++x) {
-                const int gray = qGray(resultImage.pixel(x, y));
-                if (gray < minL) minL = gray;
-                if (gray > maxL) maxL = gray;
-            }
-        }
-
-        if (maxL == minL) maxL++;
-
-        for (int y = 0; y < resultImage.height(); ++y) {
-            if (isCancellationRequested()) {
-                emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
-                return;
-            }
-            for (int x = 0; x < resultImage.width(); ++x) {
-                const QRgb pixel = resultImage.pixel(x, y);
-                const int r = qBound(0, ((qRed(pixel) - minL) * 255) / (maxL - minL), 255);
-                const int g = qBound(0, ((qGreen(pixel) - minL) * 255) / (maxL - minL), 255);
-                const int b = qBound(0, ((qBlue(pixel) - minL) * 255) / (maxL - minL), 255);
-                resultImage.setPixel(x, y, qRgb(r, g, b));
-            }
-        }
-
-        if (!sleepWithCancellationCheck(150)) {
-            emit inferenceCanceled(QStringLiteral("Улучшение изображения отменено"));
+        QString sessionError;
+        if (!ensureEnhancementSession(sessionError)) {
+            emit errorOccurred(sessionError);
             return;
         }
-        const qint64 inferenceTime = timer.elapsed();
-        statusText = QString("Контраст и яркость автокорректированы за %1 мс").arg(preprocessingTime + inferenceTime);
+
+        const int modelHeight = m_enhancementSession.inputShape.size() >= 3
+            ? effectiveDimension(m_enhancementSession.inputShape[m_enhancementSession.inputShape.size() - 2], 224)
+            : 224;
+        const int modelWidth = m_enhancementSession.inputShape.size() >= 4
+            ? effectiveDimension(m_enhancementSession.inputShape[m_enhancementSession.inputShape.size() - 1], 224)
+            : 224;
+
+        const QImage sourceImage = image.convertToFormat(QImage::Format_RGB32);
+        const QImage resizedSource = sourceImage.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+
+        std::vector<float> inputTensorData(static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight));
+        QImage chromaSource(modelWidth, modelHeight, QImage::Format_RGB32);
+        for (int y = 0; y < modelHeight; ++y) {
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QString::fromUtf8("Улучшение изображения отменено"));
+                return;
+            }
+
+            QRgb *chromaLine = reinterpret_cast<QRgb *>(chromaSource.scanLine(y));
+            for (int x = 0; x < modelWidth; ++x) {
+                const QColor ycbcr = rgbToYcbcr(QColor::fromRgb(resizedSource.pixel(x, y)));
+                const size_t index = static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x);
+                inputTensorData[index] = static_cast<float>(ycbcr.redF());
+                chromaLine[x] = qRgb(
+                    qBound(0, qRound(ycbcr.greenF() * 255.0), 255),
+                    qBound(0, qRound(ycbcr.blueF() * 255.0), 255),
+                    0
+                );
+            }
+        }
+        const qint64 preprocessingTime = timer.elapsed();
+        timer.restart();
+
+        try {
+            std::vector<int64_t> inputShape = m_enhancementSession.inputShape;
+            if (inputShape.empty()) {
+                inputShape = {1, 1, modelHeight, modelWidth};
+            } else {
+                if (inputShape.size() >= 1 && inputShape[0] <= 0) inputShape[0] = 1;
+                if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = 1;
+                if (inputShape.size() >= 3 && inputShape[inputShape.size() - 2] <= 0) inputShape[inputShape.size() - 2] = modelHeight;
+                if (inputShape.size() >= 4 && inputShape[inputShape.size() - 1] <= 0) inputShape[inputShape.size() - 1] = modelWidth;
+            }
+
+            Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
+            Ort::Value inputTensor = Ort::Value::CreateTensor<float>(
+                memoryInfo,
+                inputTensorData.data(),
+                inputTensorData.size(),
+                inputShape.data(),
+                inputShape.size()
+            );
+
+            auto outputs = m_enhancementSession.session->Run(
+                *m_enhancementSession.runOptions,
+                m_enhancementSession.inputNames.data(),
+                &inputTensor,
+                1,
+                m_enhancementSession.outputNames.data(),
+                1
+            );
+
+            if (isCancellationRequested()) {
+                emit inferenceCanceled(QString::fromUtf8("Улучшение изображения отменено"));
+                return;
+            }
+
+            const qint64 inferenceTime = timer.elapsed();
+            timer.restart();
+
+            const auto outputShape = outputs.front().GetTensorTypeAndShapeInfo().GetShape();
+            const float *outputData = outputs.front().GetTensorData<float>();
+            const int outputHeight = outputShape.size() >= 3
+                ? effectiveDimension(outputShape[outputShape.size() - 2], modelHeight * 3)
+                : modelHeight * 3;
+            const int outputWidth = outputShape.size() >= 4
+                ? effectiveDimension(outputShape[outputShape.size() - 1], modelWidth * 3)
+                : modelWidth * 3;
+
+            const QImage upscaledChroma = chromaSource.scaled(outputWidth, outputHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            resultImage = QImage(outputWidth, outputHeight, QImage::Format_RGB888);
+
+            for (int y = 0; y < outputHeight; ++y) {
+                if (isCancellationRequested()) {
+                    emit inferenceCanceled(QString::fromUtf8("Улучшение изображения отменено"));
+                    return;
+                }
+
+                uchar *resultLine = resultImage.scanLine(y);
+                for (int x = 0; x < outputWidth; ++x) {
+                    const size_t index = static_cast<size_t>(y) * static_cast<size_t>(outputWidth) + static_cast<size_t>(x);
+                    const double luminance = qBound(0.0, static_cast<double>(outputData[index]), 1.0);
+                    const QColor chroma = QColor::fromRgb(upscaledChroma.pixel(x, y));
+                    const QRgb rgb = ycbcrToRgb(luminance, chroma.redF(), chroma.greenF());
+                    resultLine[x * 3] = static_cast<uchar>(qRed(rgb));
+                    resultLine[x * 3 + 1] = static_cast<uchar>(qGreen(rgb));
+                    resultLine[x * 3 + 2] = static_cast<uchar>(qBlue(rgb));
+                }
+            }
+
+            const qint64 postprocessingTime = timer.elapsed();
+            statusText = QString::fromUtf8("Улучшение детализации выполнено за %1 мс (препроцессинг: %2 мс, инференс: %3 мс, постпроцессинг: %4 мс)")
+                             .arg(preprocessingTime + inferenceTime + postprocessingTime)
+                             .arg(preprocessingTime)
+                             .arg(inferenceTime)
+                             .arg(postprocessingTime);
+        } catch (const Ort::Exception &ex) {
+            emit errorOccurred(QString::fromUtf8("Ошибка инференса ONNX: %1").arg(QString::fromUtf8(ex.what())));
+            return;
+        }
 
     } else if (mode == ModeStyleTransfer) {
         QString sessionError;

@@ -66,8 +66,10 @@ private:
 
     bool ensureEnv();
     bool ensureBackgroundSession(QString &errorMessage);
+    bool ensureEnhancementSession(QString &errorMessage);
     bool ensureStyleSession(int styleVariant, QString &errorMessage);
     QString resolveModelPath() const;
+    QString resolveEnhancementModelPath() const;
     QString resolveStyleModelPath(int styleVariant) const;
     bool isCancellationRequested() const;
     bool sleepWithCancellationCheck(unsigned long ms);
@@ -84,6 +86,7 @@ private:
     std::vector<const char *> m_outputNames;
     std::vector<int64_t> m_inputShape;
     bool m_backgroundSessionReady = false;
+    SessionState m_enhancementSession;
     SessionState m_candyStyleSession;
     SessionState m_mosaicStyleSession;
     SessionState m_paprikaStyleSession;

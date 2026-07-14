@@ -60,6 +60,7 @@ install(FILES data/bgremoval.onnx
               data/mosaic-9.onnx
               data/AnimeGANv2_Paprika.onnx
               data/AnimeGANv2_Shinkai.onnx
+              data/super-resolution-10.onnx
     DESTINATION share/${PROJECT_NAME}/lib
 )
 
@@ -93,6 +94,7 @@ add_custom_target(distfiles
         data/mosaic-9.onnx
         data/AnimeGANv2_Paprika.onnx
         data/AnimeGANv2_Shinkai.onnx
+        data/super-resolution-10.onnx
         ${HEADERS}
 )
 
