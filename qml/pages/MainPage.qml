@@ -11,7 +11,9 @@ Page {
     property var backgroundPalette: ["#f4efe7", "#e8eef5", "#f1d7d7", "#2c3440", "#0f6d5b"]
     property var stylePalette: [
         { id: "candy", title: qsTr("Candy") },
-        { id: "mosaic", title: qsTr("Mosaic") }
+        { id: "mosaic", title: qsTr("Mosaic") },
+        { id: "paprika", title: qsTr("Paprika") },
+        { id: "shinkai", title: qsTr("Shinkai") }
     ]
 
     function applySelectedFile(filePath) {
@@ -71,20 +73,6 @@ Page {
             spacing: Theme.paddingLarge
 
             PageHeader { title: qsTr("Работа с изображениями") }
-
-            BusyIndicator {
-                anchors.horizontalCenter: parent.horizontalCenter
-                running: ImageController.isProcessing
-                size: BusyIndicatorSize.Medium
-            }
-
-            Button {
-                anchors.horizontalCenter: parent.horizontalCenter
-                visible: ImageController.isProcessing
-                enabled: ImageController.isProcessing
-                text: qsTr("Отменить обработку")
-                onClicked: ImageController.cancelProcessing()
-            }
 
             Item {
                 width: parent.width
@@ -160,6 +148,40 @@ Page {
                                     color: Theme.secondaryHighlightColor
                                     font.pixelSize: Theme.fontSizeSmall
                                     text: qsTr("Поддерживаемые форматы: JPG, PNG, BMP, WEBP")
+                                }
+                            }
+
+                            Rectangle {
+                                anchors.fill: parent
+                                color: "#aa0d1821"
+                                visible: ImageController.isProcessing && mainPage.hasPreview
+                                z: 2
+
+                                Column {
+                                    anchors.centerIn: parent
+                                    width: parent.width - Theme.paddingLarge * 2
+                                    spacing: Theme.paddingMedium
+
+                                    BusyIndicator {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        running: ImageController.isProcessing
+                                        size: BusyIndicatorSize.Medium
+                                    }
+
+                                    Label {
+                                        width: parent.width
+                                        horizontalAlignment: Text.AlignHCenter
+                                        wrapMode: Text.WordWrap
+                                        color: Theme.highlightColor
+                                        text: qsTr("Идет обработка изображения")
+                                    }
+
+                                    Button {
+                                        anchors.horizontalCenter: parent.horizontalCenter
+                                        enabled: ImageController.isProcessing
+                                        text: qsTr("Отменить обработку")
+                                        onClicked: ImageController.cancelProcessing()
+                                    }
                                 }
                             }
                         }
@@ -262,7 +284,7 @@ Page {
 
                             Button {
                                 width: (backgroundToolsGrid.width - backgroundToolsGrid.spacing) / 2
-                                text: qsTr("Фон + blur")
+                                text: qsTr("Добавить блюр")
                                 enabled: !ImageController.isProcessing
                                 onClicked: ImageController.triggerBackgroundBlur()
                             }
@@ -354,9 +376,10 @@ Page {
                             text: qsTr("Выберите художественный пресет и примените нейросетевую стилизацию")
                         }
 
-                        Row {
+                        Grid {
                             width: parent.width
                             spacing: Theme.paddingSmall
+                            columns: 2
 
                             Repeater {
                                 model: mainPage.stylePalette

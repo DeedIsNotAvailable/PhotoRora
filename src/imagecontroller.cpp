@@ -8,7 +8,10 @@
 namespace {
 int styleVariantFromId(const QString &styleId)
 {
-    return styleId == QStringLiteral("mosaic") ? OnnxWorker::StyleMosaic : OnnxWorker::StyleCandy;
+    if (styleId == QStringLiteral("mosaic")) return OnnxWorker::StyleMosaic;
+    if (styleId == QStringLiteral("paprika")) return OnnxWorker::StylePaprika;
+    if (styleId == QStringLiteral("shinkai")) return OnnxWorker::StyleShinkai;
+    return OnnxWorker::StyleCandy;
 }
 }
 
@@ -144,7 +147,11 @@ void ImageController::setBackgroundColor(const QString &colorValue)
 
 void ImageController::setSelectedStyle(const QString &styleId)
 {
-    if ((styleId != QStringLiteral("candy") && styleId != QStringLiteral("mosaic")) || styleId == m_selectedStyleId) {
+    if ((styleId != QStringLiteral("candy")
+         && styleId != QStringLiteral("mosaic")
+         && styleId != QStringLiteral("paprika")
+         && styleId != QStringLiteral("shinkai"))
+        || styleId == m_selectedStyleId) {
         return;
     }
 

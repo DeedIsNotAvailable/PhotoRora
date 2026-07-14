@@ -21,6 +21,16 @@ int effectiveDimension(qint64 value, int fallback)
     return value > 0 ? static_cast<int>(value) : fallback;
 }
 
+int alignedDimension(int value, int alignment, int minimum)
+{
+    if (alignment <= 1) {
+        return qMax(value, minimum);
+    }
+
+    const int clamped = qMax(value, minimum);
+    return qMax(minimum, (clamped / alignment) * alignment);
+}
+
 float toProbability(float value)
 {
     if (value >= 0.0f && value <= 1.0f) {
@@ -57,6 +67,26 @@ QImage tensorToImage(const float *outputData, int width, int height)
 
     return image;
 }
+
+QImage tensorToAnimeGanImage(const float *outputData, int width, int height)
+{
+    QImage image(width, height, QImage::Format_RGB888);
+
+    for (int y = 0; y < height; ++y) {
+        uchar *scanLine = image.scanLine(y);
+        for (int x = 0; x < width; ++x) {
+            const size_t index = (static_cast<size_t>(y) * static_cast<size_t>(width) + static_cast<size_t>(x)) * 3u;
+            const int r = qBound(0, qRound((outputData[index] + 1.0f) * 127.5f), 255);
+            const int g = qBound(0, qRound((outputData[index + 1] + 1.0f) * 127.5f), 255);
+            const int b = qBound(0, qRound((outputData[index + 2] + 1.0f) * 127.5f), 255);
+            scanLine[x * 3] = static_cast<uchar>(r);
+            scanLine[x * 3 + 1] = static_cast<uchar>(g);
+            scanLine[x * 3 + 2] = static_cast<uchar>(b);
+        }
+    }
+
+    return image;
+}
 }
 
 void OnnxWorker::requestCancel()
@@ -84,7 +114,14 @@ QString OnnxWorker::resolveModelPath() const
 
 QString OnnxWorker::resolveStyleModelPath(int styleVariant) const
 {
-    const QString fileName = styleVariant == StyleMosaic ? QStringLiteral("mosaic-9.onnx") : QStringLiteral("candy-9.onnx");
+    QString fileName = QStringLiteral("candy-9.onnx");
+    if (styleVariant == StyleMosaic) {
+        fileName = QStringLiteral("mosaic-9.onnx");
+    } else if (styleVariant == StylePaprika) {
+        fileName = QStringLiteral("AnimeGANv2_Paprika.onnx");
+    } else if (styleVariant == StyleShinkai) {
+        fileName = QStringLiteral("AnimeGANv2_Shinkai.onnx");
+    }
     const QStringList candidates = {
         QStringLiteral("/usr/share/ru.omgtu.PhotoRora/lib/") + fileName,
         QDir::cleanPath(QCoreApplication::applicationDirPath() + QStringLiteral("/../share/ru.omgtu.PhotoRora/lib/") + fileName),
@@ -246,8 +283,15 @@ bool OnnxWorker::ensureBackgroundSession(QString &errorMessage)
 
 bool OnnxWorker::ensureStyleSession(int styleVariant, QString &errorMessage)
 {
-    SessionState &state = styleVariant == StyleMosaic ? m_mosaicStyleSession : m_candyStyleSession;
-    return prepareSessionState(state, resolveStyleModelPath(styleVariant), errorMessage);
+    SessionState *state = &m_candyStyleSession;
+    if (styleVariant == StyleMosaic) {
+        state = &m_mosaicStyleSession;
+    } else if (styleVariant == StylePaprika) {
+        state = &m_paprikaStyleSession;
+    } else if (styleVariant == StyleShinkai) {
+        state = &m_shinkaiStyleSession;
+    }
+    return prepareSessionState(*state, resolveStyleModelPath(styleVariant), errorMessage);
 }
 
 bool OnnxWorker::isCancellationRequested() const
@@ -504,10 +548,35 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
             return;
         }
 
-        SessionState &styleSession = styleVariant == StyleMosaic ? m_mosaicStyleSession : m_candyStyleSession;
-        const int modelHeight = styleSession.inputShape.size() >= 3 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 2], image.height()) : image.height();
-        const int modelWidth = styleSession.inputShape.size() >= 4 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 1], image.width()) : image.width();
-        QImage resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation).convertToFormat(QImage::Format_RGB888);
+        SessionState *styleSessionPtr = &m_candyStyleSession;
+        if (styleVariant == StyleMosaic) {
+            styleSessionPtr = &m_mosaicStyleSession;
+        } else if (styleVariant == StylePaprika) {
+            styleSessionPtr = &m_paprikaStyleSession;
+        } else if (styleVariant == StyleShinkai) {
+            styleSessionPtr = &m_shinkaiStyleSession;
+        }
+        SessionState &styleSession = *styleSessionPtr;
+        const bool isAnimeGanStyle = (styleVariant == StylePaprika || styleVariant == StyleShinkai);
+        int modelHeight = isAnimeGanStyle
+            ? (styleSession.inputShape.size() >= 3 ? effectiveDimension(styleSession.inputShape[1], image.height()) : image.height())
+            : (styleSession.inputShape.size() >= 3 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 2], image.height()) : image.height());
+        int modelWidth = isAnimeGanStyle
+            ? (styleSession.inputShape.size() >= 4 ? effectiveDimension(styleSession.inputShape[2], image.width()) : image.width())
+            : (styleSession.inputShape.size() >= 4 ? effectiveDimension(styleSession.inputShape[styleSession.inputShape.size() - 1], image.width()) : image.width());
+
+        QImage resized;
+        if (isAnimeGanStyle) {
+            const int maxAnimeGanSide = 512;
+            const QSize boundedTarget = image.size().scaled(maxAnimeGanSide, maxAnimeGanSide, Qt::KeepAspectRatio);
+            modelWidth = alignedDimension(boundedTarget.width(), 32, 32);
+            modelHeight = alignedDimension(boundedTarget.height(), 32, 32);
+            resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                          .convertToFormat(QImage::Format_RGB888);
+        } else {
+            resized = image.scaled(modelWidth, modelHeight, Qt::IgnoreAspectRatio, Qt::SmoothTransformation)
+                          .convertToFormat(QImage::Format_RGB888);
+        }
 
         std::vector<float> inputTensorData(static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) * 3u);
         for (int y = 0; y < modelHeight; ++y) {
@@ -519,12 +588,20 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
             const uchar *scanLine = resized.constScanLine(y);
             for (int x = 0; x < modelWidth; ++x) {
                 const int pixelOffset = x * 3;
-                const size_t pixelIndex = static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x);
-                inputTensorData[pixelIndex] = static_cast<float>(scanLine[pixelOffset]);
-                inputTensorData[static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
-                    static_cast<float>(scanLine[pixelOffset + 1]);
-                inputTensorData[2u * static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
-                    static_cast<float>(scanLine[pixelOffset + 2]);
+                if (isAnimeGanStyle) {
+                    const size_t pixelIndex =
+                        (static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x)) * 3u;
+                    inputTensorData[pixelIndex] = static_cast<float>(scanLine[pixelOffset]) / 127.5f - 1.0f;
+                    inputTensorData[pixelIndex + 1] = static_cast<float>(scanLine[pixelOffset + 1]) / 127.5f - 1.0f;
+                    inputTensorData[pixelIndex + 2] = static_cast<float>(scanLine[pixelOffset + 2]) / 127.5f - 1.0f;
+                } else {
+                    const size_t pixelIndex = static_cast<size_t>(y) * static_cast<size_t>(modelWidth) + static_cast<size_t>(x);
+                    inputTensorData[pixelIndex] = static_cast<float>(scanLine[pixelOffset]);
+                    inputTensorData[static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                        static_cast<float>(scanLine[pixelOffset + 1]);
+                    inputTensorData[2u * static_cast<size_t>(modelWidth) * static_cast<size_t>(modelHeight) + pixelIndex] =
+                        static_cast<float>(scanLine[pixelOffset + 2]);
+                }
             }
         }
         const qint64 preprocessingTime = timer.elapsed();
@@ -533,12 +610,23 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
         try {
             std::vector<int64_t> inputShape = styleSession.inputShape;
             if (inputShape.empty()) {
-                inputShape = {1, 3, modelHeight, modelWidth};
+                inputShape = isAnimeGanStyle
+                    ? std::vector<int64_t>{1, modelHeight, modelWidth, 3}
+                    : std::vector<int64_t>{1, 3, modelHeight, modelWidth};
             } else {
-                if (inputShape.size() >= 1 && inputShape[0] <= 0) inputShape[0] = 1;
-                if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = 3;
-                if (inputShape.size() >= 3 && inputShape[inputShape.size() - 2] <= 0) inputShape[inputShape.size() - 2] = modelHeight;
-                if (inputShape.size() >= 4 && inputShape[inputShape.size() - 1] <= 0) inputShape[inputShape.size() - 1] = modelWidth;
+                if (inputShape.size() >= 1 && inputShape[0] <= 0) {
+                    inputShape[0] = 1;
+                }
+
+                if (isAnimeGanStyle) {
+                    if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = modelHeight;
+                    if (inputShape.size() >= 3 && inputShape[2] <= 0) inputShape[2] = modelWidth;
+                    if (inputShape.size() >= 4 && inputShape[3] <= 0) inputShape[3] = 3;
+                } else {
+                    if (inputShape.size() >= 2 && inputShape[1] <= 0) inputShape[1] = 3;
+                    if (inputShape.size() >= 3 && inputShape[inputShape.size() - 2] <= 0) inputShape[inputShape.size() - 2] = modelHeight;
+                    if (inputShape.size() >= 4 && inputShape[inputShape.size() - 1] <= 0) inputShape[inputShape.size() - 1] = modelWidth;
+                }
             }
 
             Ort::MemoryInfo memoryInfo = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
@@ -569,13 +657,27 @@ void OnnxWorker::runInference(const QImage &image, int mode, const QColor &backg
 
             const auto outputShape = outputs.front().GetTensorTypeAndShapeInfo().GetShape();
             const float *outputData = outputs.front().GetTensorData<float>();
-            const int outputHeight = outputShape.size() >= 3 ? effectiveDimension(outputShape[outputShape.size() - 2], modelHeight) : modelHeight;
-            const int outputWidth = outputShape.size() >= 4 ? effectiveDimension(outputShape[outputShape.size() - 1], modelWidth) : modelWidth;
+            const int outputHeight = isAnimeGanStyle
+                ? (outputShape.size() >= 3 ? effectiveDimension(outputShape[1], modelHeight) : modelHeight)
+                : (outputShape.size() >= 3 ? effectiveDimension(outputShape[outputShape.size() - 2], modelHeight) : modelHeight);
+            const int outputWidth = isAnimeGanStyle
+                ? (outputShape.size() >= 4 ? effectiveDimension(outputShape[2], modelWidth) : modelWidth)
+                : (outputShape.size() >= 4 ? effectiveDimension(outputShape[outputShape.size() - 1], modelWidth) : modelWidth);
 
-            resultImage = tensorToImage(outputData, outputWidth, outputHeight).scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
+            resultImage = (isAnimeGanStyle
+                           ? tensorToAnimeGanImage(outputData, outputWidth, outputHeight)
+                           : tensorToImage(outputData, outputWidth, outputHeight))
+                              .scaled(image.size(), Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
 
             const qint64 postprocessingTime = timer.elapsed();
-            const QString styleName = styleVariant == StyleMosaic ? QStringLiteral("Mosaic") : QStringLiteral("Candy");
+            QString styleName = QStringLiteral("Candy");
+            if (styleVariant == StyleMosaic) {
+                styleName = QStringLiteral("Mosaic");
+            } else if (styleVariant == StylePaprika) {
+                styleName = QStringLiteral("Paprika");
+            } else if (styleVariant == StyleShinkai) {
+                styleName = QStringLiteral("Shinkai");
+            }
             statusText = QString("Стилизация %1 выполнена за %2 мс (препроцессинг: %3 мс, инференс: %4 мс, постпроцессинг: %5 мс)")
                              .arg(styleName)
                              .arg(preprocessingTime + inferenceTime + postprocessingTime)

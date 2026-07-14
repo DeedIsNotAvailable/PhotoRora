@@ -32,7 +32,9 @@ public:
 
     enum StyleVariant {
         StyleCandy,
-        StyleMosaic
+        StyleMosaic,
+        StylePaprika,
+        StyleShinkai
     };
     Q_ENUM(StyleVariant)
 
@@ -84,6 +86,8 @@ private:
     bool m_backgroundSessionReady = false;
     SessionState m_candyStyleSession;
     SessionState m_mosaicStyleSession;
+    SessionState m_paprikaStyleSession;
+    SessionState m_shinkaiStyleSession;
 };
 
 Q_DECLARE_METATYPE(QImage)

@@ -58,6 +58,8 @@ install(DIRECTORY qml
 install(FILES data/bgremoval.onnx
               data/candy-9.onnx
               data/mosaic-9.onnx
+              data/AnimeGANv2_Paprika.onnx
+              data/AnimeGANv2_Shinkai.onnx
     DESTINATION share/${PROJECT_NAME}/lib
 )
 
@@ -89,6 +91,8 @@ add_custom_target(distfiles
         data/bgremoval.onnx
         data/candy-9.onnx
         data/mosaic-9.onnx
+        data/AnimeGANv2_Paprika.onnx
+        data/AnimeGANv2_Shinkai.onnx
         ${HEADERS}
 )
 
