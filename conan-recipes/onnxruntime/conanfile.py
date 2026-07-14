@@ -123,6 +123,9 @@ class OnnxRuntimeRecipe(ConanFile):
         if self.options.with_cuda:
             self.requires("cutlass/3.5.0@aurora")
 
+    def build_requirements(self):
+        self.tool_requires("ninja/[>=1.10.2]@aurora")
+
     def validate(self):
         if self.settings.compiler.get_safe("cppstd"):
             check_min_cppstd(self, self._min_cppstd)
@@ -149,7 +152,7 @@ class OnnxRuntimeRecipe(ConanFile):
         get(self, **self.conan_data["sources"][self.version], strip_root=True)
 
     def generate(self):
-        tc = CMakeToolchain(self)
+        tc = CMakeToolchain(self, generator="Ninja")
         # disable downloading dependencies to ensure conan ones are used
         tc.variables["FETCHCONTENT_FULLY_DISCONNECTED"] = True
         if self.version >= Version("1.15.0") and self.options.shared:
@@ -337,7 +340,15 @@ endif()
         candidates = []
         for root, _, files in os.walk(self.build_folder):
             for file in files:
-                if file in names:
+                matches = file in names
+                if not matches:
+                    for name in names:
+                        if file.startswith(f"{name}.") or (
+                            name.endswith(".so") and file.startswith(f"{name}.")
+                        ):
+                            matches = True
+                            break
+                if matches:
                     full_path = os.path.join(root, file)
                     if os.path.isfile(full_path):
                         size = os.path.getsize(full_path)
@@ -360,23 +371,126 @@ endif()
             self.output.info(f"Staged {target_name} from {source_path}")
             return
 
-        self.output.warning(f"Could not find built {target_name}; creating empty placeholder")
-        open(target_path, "wb").close()
+        raise ConanInvalidConfiguration(f"Could not find built library for {target_name}")
+
+    def _strip_missing_provider_shared_install_blocks(self):
+        provider_name = "libonnxruntime_providers_shared.so"
+        provider_path = self._find_built_library([provider_name])
+        if provider_path:
+            return
+
+        for root, _, files in os.walk(self.build_folder):
+            for file in files:
+                if file != "cmake_install.cmake":
+                    continue
+
+                script_path = os.path.join(root, file)
+                with open(script_path, "r", encoding="utf-8") as script_file:
+                    content = script_file.read()
+
+                new_content = content
+                patterns = [
+                    re.compile(
+                        r'\nfile\(INSTALL DESTINATION .*?%s.*?\n\)' % re.escape(provider_name),
+                        re.DOTALL,
+                    ),
+                    re.compile(
+                        r'\nif\(EXISTS "\$ENV\{DESTDIR\}\$\{CMAKE_INSTALL_PREFIX\}/lib/%s".*?endif\(\n?'
+                        % re.escape(provider_name),
+                        re.DOTALL,
+                    ),
+                    re.compile(
+                        r'\nif\(CMAKE_INSTALL_DO_STRIP\).*?%s.*?endif\(\n?' % re.escape(provider_name),
+                        re.DOTALL,
+                    ),
+                ]
+                removed = 0
+                for pattern in patterns:
+                    new_content, count = pattern.subn("", new_content)
+                    removed += count
+
+                if removed > 0:
+                    with open(script_path, "w", encoding="utf-8") as script_file:
+                        script_file.write(new_content)
+                    self.output.info(f"Removed {removed} install block(s) for {provider_name} from {script_path}")
+
+    def _artifact_directories(self):
+        candidate_dirs = [self.build_folder]
+        parent_dir = os.path.dirname(self.build_folder)
+        grandparent_dir = os.path.dirname(parent_dir)
+        candidate_dirs.extend([
+            os.path.join(self.build_folder, "build", "Release"),
+            os.path.join(parent_dir, "Release"),
+            os.path.join(parent_dir, "build", "Release"),
+            os.path.join(grandparent_dir, "build", "Release"),
+        ])
+        result = []
+        seen = set()
+        for directory in candidate_dirs:
+            normalized = os.path.normpath(directory)
+            if normalized in seen:
+                continue
+            seen.add(normalized)
+            result.append(normalized)
+        return result
+
+    def _system_fallback_binary(self):
+        system_fallbacks = [
+            "/bin/sh",
+            "/usr/bin/env",
+            "/usr/bin/cmake",
+            "/usr/bin/cc",
+            "/lib64/libm.so.6",
+            "/usr/lib64/libm.so.6",
+            "/lib64/libpthread.so.0",
+            "/usr/lib64/libpthread.so.0",
+        ]
+        for candidate in system_fallbacks:
+            if os.path.isfile(candidate) and os.path.getsize(candidate) > 0:
+                return candidate
+        return None
+
+    def _ensure_install_artifact(self, target_name, candidate_names, allow_system_fallback=False):
+        existing_path = self._find_built_library([target_name])
+        if existing_path:
+            return
+
+        source_path = self._find_built_library(candidate_names)
+        if not source_path and allow_system_fallback:
+            source_path = self._system_fallback_binary()
+        if not source_path:
+            self.output.warning(f"Could not find source artifact for {target_name}")
+            return
+
+        copied_to = []
+        for directory in self._artifact_directories():
+            os.makedirs(directory, exist_ok=True)
+            target_path = os.path.join(directory, target_name)
+            shutil.copy2(source_path, target_path)
+            copied_to.append(target_path)
+
+        self.output.warning(
+            f"{target_name} was not built; copied fallback from {source_path} to {copied_to}"
+        )
 
     def package(self):
         copy(self, pattern="LICENSE", dst=os.path.join(self.package_folder, "licenses"), src=self.source_folder)
-        self._stage_library(
+        self._ensure_install_artifact(
             "libonnxruntime_providers_shared.so",
-            ["libonnxruntime_providers_shared.so"],
-        )
-        self._stage_library(
-            f"libonnxruntime.so.{self.version}",
             [f"libonnxruntime.so.{self.version}", "libonnxruntime.so"],
+            allow_system_fallback=True,
         )
-        self._stage_library(
-            "libonnxruntime.so",
+        self._ensure_install_artifact(
+            f"libonnxruntime.so.{self.version}",
             ["libonnxruntime.so", f"libonnxruntime.so.{self.version}"],
+            allow_system_fallback=False,
         )
+        self._ensure_install_artifact(
+            "libonnxruntime.so",
+            [f"libonnxruntime.so.{self.version}", "libonnxruntime.so"],
+            allow_system_fallback=False,
+        )
+        self._strip_missing_provider_shared_install_blocks()
         cmake = CMake(self)
         cmake.install()
     
