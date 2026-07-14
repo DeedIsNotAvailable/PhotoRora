@@ -57,8 +57,38 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="37"/>
-        <source>Изображение успешно импортировано. Можно продолжать работу.</source>
+        <location filename="../qml/pages/MainPage.qml" line="32"/>
+        <source>Изображение успешно импортировано.</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="78"/>
+        <source>Подготовьте изображение для офлайн-обработки нейросетью</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="92"/>
+        <source>Отменить обработку</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="144"/>
+        <source>Отмена</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="151"/>
+        <source>Сброс</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="158"/>
+        <source>Сохранить</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="196"/>
+        <source>Редактируйте с удовольствием!</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
@@ -67,37 +97,42 @@
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="57"/>
+        <location filename="../qml/pages/MainPage.qml" line="58"/>
         <source>Выбрать из файлов</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="68"/>
+        <location filename="../qml/pages/MainPage.qml" line="69"/>
         <source>Импорт фотографии</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="78"/>
-        <source>Подготовьте изображение для дальнейшего офлайн-редактирования</source>
+        <location filename="../qml/pages/MainPage.qml" line="98"/>
+        <source>Инструменты</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="111"/>
-        <source>Хорошее редактирование начинается с аккуратного импорта</source>
+        <location filename="../qml/pages/MainPage.qml" line="123"/>
+        <source>Фон</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="120"/>
-        <source>Основной сценарий — выбор фото из галереи. Если нужно, можно открыть его и из системных файлов.</source>
+        <location filename="../qml/pages/MainPage.qml" line="130"/>
+        <source>Улучшить</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="154"/>
+        <location filename="../qml/pages/MainPage.qml" line="137"/>
+        <source>Стиль</source>
+        <translation type="unfinished"></translation>
+    </message>
+    <message>
+        <location filename="../qml/pages/MainPage.qml" line="230"/>
         <source>Здесь появится предпросмотр</source>
         <translation type="unfinished"></translation>
     </message>
     <message>
-        <location filename="../qml/pages/MainPage.qml" line="163"/>
+        <location filename="../qml/pages/MainPage.qml" line="239"/>
         <source>Поддерживаемые форматы: JPG, PNG, BMP, WEBP</source>
         <translation type="unfinished"></translation>
     </message>

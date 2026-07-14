@@ -1,4 +1,7 @@
 build/
+build-*/
+CMakeLists.txt.user
+*.user
 *.pro.user
 *.pro.user.*
 *.qmake.stash
@@ -18,3 +21,7 @@ ui_*.h
 *.prl
 *.debug
 *.release
+.qtc_clangd/
+.cache/
+.idea/
+.vscode/
